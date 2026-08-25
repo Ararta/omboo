@@ -23,6 +23,7 @@ export function EmployeesSection() {
   const [newEmp, setNewEmp] = useState({ name: "", position: "", email: "", hireDate: todayInYerevan(), balance: 20 });
   const [loading, setLoading] = useState(true);
   const [addError, setAddError] = useState("");
+  const [emailConflict, setEmailConflict] = useState(false);
 
   async function load() {
     const [emps, reqs] = await Promise.all([api.get<EmployeeView[]>("/employees"), api.get<RequestView[]>("/requests")]);
@@ -48,23 +49,25 @@ export function EmployeesSection() {
     load();
   }
 
-  async function addEmployee() {
+  async function addEmployee(opts?: { skipEmail?: boolean }) {
     if (!newEmp.name.trim()) return;
     setAddError("");
     try {
       await api.post("/employees", {
         name: newEmp.name.trim(),
         position: newEmp.position.trim() || "—",
-        email: newEmp.email.trim() || undefined,
+        email: opts?.skipEmail ? undefined : newEmp.email.trim() || undefined,
         hireDate: newEmp.hireDate,
         minimumDays: Math.max(0, Number(newEmp.balance) || 0),
         extendedDays: 0,
         additionalDays: 0,
       });
       setNewEmp({ name: "", position: "", email: "", hireDate: todayInYerevan(), balance: 20 });
+      setEmailConflict(false);
       load();
     } catch (e) {
       setAddError(e instanceof ApiError ? e.message : "Չհաջողվեց ավելացնել աշխատողին, փորձեք կրկին։");
+      setEmailConflict(e instanceof ApiError && e.status === 409);
     }
   }
 
@@ -249,11 +252,23 @@ export function EmployeesSection() {
             onChange={(e) => setNewEmp({ ...newEmp, balance: Number(e.target.value) })}
             className="w-[110px] rounded-md border border-line px-2.5 py-1.5 text-sm"
           />
-          <Button onClick={addEmployee} disabled={!newEmp.name.trim()}>
+          <Button onClick={() => addEmployee()} disabled={!newEmp.name.trim()}>
             Ավելացնել
           </Button>
         </div>
-        {!!addError && <div className="mt-2 text-[12.5px] text-red-700">{addError}</div>}
+        {!!addError && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-red-700">
+            <span>{addError}</span>
+            {emailConflict && (
+              <button
+                onClick={() => addEmployee({ skipEmail: true })}
+                className="font-semibold text-seal underline hover:no-underline"
+              >
+                Ավելացնե՞մ առանց email-ի
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   );
