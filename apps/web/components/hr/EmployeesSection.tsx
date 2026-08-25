@@ -24,6 +24,7 @@ export function EmployeesSection() {
   const [loading, setLoading] = useState(true);
   const [addError, setAddError] = useState("");
   const [emailConflict, setEmailConflict] = useState(false);
+  const [nameWarning, setNameWarning] = useState<EmployeeView | null>(null);
 
   async function load() {
     const [emps, reqs] = await Promise.all([api.get<EmployeeView[]>("/employees"), api.get<RequestView[]>("/requests")]);
@@ -49,9 +50,20 @@ export function EmployeesSection() {
     load();
   }
 
-  async function addEmployee(opts?: { skipEmail?: boolean }) {
+  async function addEmployee(opts?: { skipEmail?: boolean; confirmedNameDuplicate?: boolean }) {
     if (!newEmp.name.trim()) return;
     setAddError("");
+
+    if (!opts?.confirmedNameDuplicate) {
+      const trimmedName = newEmp.name.trim().toLocaleLowerCase("hy");
+      const existing = employees.find((e) => e.name.trim().toLocaleLowerCase("hy") === trimmedName);
+      if (existing) {
+        setNameWarning(existing);
+        return;
+      }
+    }
+    setNameWarning(null);
+
     try {
       await api.post("/employees", {
         name: newEmp.name.trim(),
@@ -256,12 +268,29 @@ export function EmployeesSection() {
             Ավելացնել
           </Button>
         </div>
+        {!!nameWarning && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-[#FBF3D9] px-2.5 py-2 text-[12.5px] text-[#7A5B00]">
+            <span>
+              Այս անունով աշխատող արդեն կա համակարգում ({nameWarning.position}, {nameWarning.email})։ Ավելացնե՞լ, արդյոք, մեկ ուրիշ՝ նույն
+              անունով։
+            </span>
+            <button
+              onClick={() => addEmployee({ confirmedNameDuplicate: true })}
+              className="font-semibold text-seal underline hover:no-underline"
+            >
+              Այո, ավելացնել
+            </button>
+            <button onClick={() => setNameWarning(null)} className="font-semibold underline hover:no-underline">
+              Չեղարկել
+            </button>
+          </div>
+        )}
         {!!addError && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-red-700">
             <span>{addError}</span>
             {emailConflict && (
               <button
-                onClick={() => addEmployee({ skipEmail: true })}
+                onClick={() => addEmployee({ skipEmail: true, confirmedNameDuplicate: true })}
                 className="font-semibold text-seal underline hover:no-underline"
               >
                 Ավելացնեմ ըստ Ձեր լրացվածի

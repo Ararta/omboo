@@ -72,7 +72,12 @@ export class EmployeesService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        throw new ConflictException("Այս էլ. փոստով աշխատող կամ հաշիվ արդեն գոյություն ունի համակարգում։");
+        const owner = await this.prisma.client.employee.findUnique({ where: { email }, select: { name: true, position: true } });
+        throw new ConflictException(
+          owner
+            ? `Այս էլ. փոստն արդեն կապված է ${owner.name}-ի (${owner.position}) հաշվին։`
+            : "Այս էլ. փոստով հաշիվ արդեն գոյություն ունի համակարգում։",
+        );
       }
       throw e;
     }
