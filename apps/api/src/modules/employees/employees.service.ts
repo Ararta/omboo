@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import * as bcrypt from "bcryptjs";
+import { Prisma } from "@omboo/database";
 import type { CreateEmployeeInput, UpdateEmployeeInput } from "@omboo/shared";
 import { notifications } from "@omboo/shared";
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -35,38 +36,46 @@ export class EmployeesService {
     // placeholder — a shared literal like "—" would collide on the second such employee.
     const employeeEmail = email || `no-email-${randomBytes(4).toString("hex")}@omboo.local`;
 
-    const employee = await this.prisma.client.$transaction(async (tx) => {
-      const created = await tx.employee.create({
-        data: {
-          name: dto.name,
-          position: dto.position,
-          email: employeeEmail,
-          hireDate: new Date(dto.hireDate),
-          minimumDays: dto.minimumDays,
-          extendedDays: dto.extendedDays,
-          additionalDays: dto.additionalDays,
-          annualTotal,
-          balance: annualTotal,
-          dayOffBalance: 5,
-          lastVacationRequestDate: new Date(dto.hireDate),
-        },
-      });
-      if (email && passwordHash) {
-        await tx.user.create({
-          data: { email, passwordHash, role: "EMPLOYEE", employeeId: created.id },
+    let employee;
+    try {
+      employee = await this.prisma.client.$transaction(async (tx) => {
+        const created = await tx.employee.create({
+          data: {
+            name: dto.name,
+            position: dto.position,
+            email: employeeEmail,
+            hireDate: new Date(dto.hireDate),
+            minimumDays: dto.minimumDays,
+            extendedDays: dto.extendedDays,
+            additionalDays: dto.additionalDays,
+            annualTotal,
+            balance: annualTotal,
+            dayOffBalance: 5,
+            lastVacationRequestDate: new Date(dto.hireDate),
+          },
         });
-      }
-      await tx.balanceAdjustmentLog.create({
-        data: {
-          employeeId: created.id,
-          field: "balance",
-          previousValue: 0,
-          nextValue: annualTotal,
-          changedByUserId: "system",
-        },
+        if (email && passwordHash) {
+          await tx.user.create({
+            data: { email, passwordHash, role: "EMPLOYEE", employeeId: created.id },
+          });
+        }
+        await tx.balanceAdjustmentLog.create({
+          data: {
+            employeeId: created.id,
+            field: "balance",
+            previousValue: 0,
+            nextValue: annualTotal,
+            changedByUserId: "system",
+          },
+        });
+        return created;
       });
-      return created;
-    });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        throw new ConflictException("Այս էլ. փոստով աշխատող կամ հաշիվ արդեն գոյություն ունի համակարգում։");
+      }
+      throw e;
+    }
 
     return { employee, temporaryPassword };
   }

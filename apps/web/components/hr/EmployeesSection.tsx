@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Stamp } from "lucide-react";
 import { chunkSatisfied, PRIORITY_LABELS, todayInYerevan, workYearBounds } from "@omboo/shared";
-import { api } from "../../lib/api-client";
+import { api, ApiError } from "../../lib/api-client";
 import type { EmployeeView, RequestView } from "../../lib/types";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -22,6 +22,7 @@ export function EmployeesSection() {
   const [balanceDraft, setBalanceDraft] = useState<Record<string, string>>({});
   const [newEmp, setNewEmp] = useState({ name: "", position: "", email: "", hireDate: todayInYerevan(), balance: 20 });
   const [loading, setLoading] = useState(true);
+  const [addError, setAddError] = useState("");
 
   async function load() {
     const [emps, reqs] = await Promise.all([api.get<EmployeeView[]>("/employees"), api.get<RequestView[]>("/requests")]);
@@ -49,17 +50,22 @@ export function EmployeesSection() {
 
   async function addEmployee() {
     if (!newEmp.name.trim()) return;
-    await api.post("/employees", {
-      name: newEmp.name.trim(),
-      position: newEmp.position.trim() || "—",
-      email: newEmp.email.trim() || undefined,
-      hireDate: newEmp.hireDate,
-      minimumDays: Math.max(0, Number(newEmp.balance) || 0),
-      extendedDays: 0,
-      additionalDays: 0,
-    });
-    setNewEmp({ name: "", position: "", email: "", hireDate: todayInYerevan(), balance: 20 });
-    load();
+    setAddError("");
+    try {
+      await api.post("/employees", {
+        name: newEmp.name.trim(),
+        position: newEmp.position.trim() || "—",
+        email: newEmp.email.trim() || undefined,
+        hireDate: newEmp.hireDate,
+        minimumDays: Math.max(0, Number(newEmp.balance) || 0),
+        extendedDays: 0,
+        additionalDays: 0,
+      });
+      setNewEmp({ name: "", position: "", email: "", hireDate: todayInYerevan(), balance: 20 });
+      load();
+    } catch (e) {
+      setAddError(e instanceof ApiError ? e.message : "Չհաջողվեց ավելացնել աշխատողին, փորձեք կրկին։");
+    }
   }
 
   const autoChunkByEmployee = useMemo(() => {
@@ -247,6 +253,7 @@ export function EmployeesSection() {
             Ավելացնել
           </Button>
         </div>
+        {!!addError && <div className="mt-2 text-[12.5px] text-red-700">{addError}</div>}
       </div>
     </Card>
   );

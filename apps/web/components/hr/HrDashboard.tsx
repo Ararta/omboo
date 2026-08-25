@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Building2, Users, Clock, FileSignature, RotateCcw, ScrollText } from "lucide-react";
+import { api } from "../../lib/api-client";
+import type { OrgSettingsView } from "../../lib/types";
 import { OrgSettingsSection } from "./OrgSettingsSection";
 import { EmployeesSection } from "./EmployeesSection";
 import { ReminderSection } from "./ReminderSection";
@@ -10,8 +12,14 @@ import { RecallsSection } from "./RecallsSection";
 import { AuditSection } from "./AuditSection";
 
 export function HrDashboard() {
-  const [orgConfigured, setOrgConfigured] = useState(false);
+  // Starts unknown so the "fill in" badge doesn't flash on an already-configured org just
+  // because the org tab (the only place that normally checks) hasn't been opened yet.
+  const [orgConfigured, setOrgConfigured] = useState<boolean | null>(null);
   const [activeId, setActiveId] = useState("employees");
+
+  useEffect(() => {
+    api.get<OrgSettingsView>("/org-settings").then((data) => setOrgConfigured(data.companyName.trim().length > 0));
+  }, []);
 
   const NAV_SECTIONS = [
     { id: "org", label: "Կազմակերպության տվյալներ", icon: Building2, render: () => <OrgSettingsSection mode="always" onConfiguredChange={setOrgConfigured} /> },
@@ -43,7 +51,7 @@ export function HrDashboard() {
               >
                 <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-white" : "text-muted"} />
                 <span className="flex-1">{s.label}</span>
-                {s.id === "org" && !orgConfigured && (
+                {s.id === "org" && orgConfigured === false && (
                   <span className="rounded-full bg-seal px-1.5 py-0.5 text-[9.5px] font-bold text-white">լրացնել</span>
                 )}
               </button>
