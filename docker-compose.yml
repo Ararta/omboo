@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: omboo
+      POSTGRES_PASSWORD: omboo_dev_password
+      POSTGRES_DB: omboo
+    ports:
+      - "5432:5432"
+    volumes:
+      - omboo_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omboo -d omboo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: omboo
+      MINIO_ROOT_PASSWORD: omboo_dev_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - omboo_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot job that creates the omboo-signatures bucket on first startup.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 omboo omboo_dev_password &&
+      mc mb -p local/omboo-signatures &&
+      mc anonymous set download local/omboo-signatures
+      "
+
+volumes:
+  omboo_db_data:
+  omboo_minio_data:

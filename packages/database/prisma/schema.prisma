@@ -1,0 +1,253 @@
+// Omboo — Phase 1 schema (vacation/absence request management)
+// See reference/Omboo_texnikakan_handznararagir.docx and reference/mrk_prototype_1.jsx
+// for the business rules this schema supports.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  EMPLOYEE
+  DIRECTOR
+  HR
+}
+
+enum RequestType {
+  VACATION
+  UNPAID
+  SICK
+  DAYOFF
+}
+
+// SUBMITTED -> APPROVED -> ORDER_CREATED
+//           -> REJECTED (director rejected, mandatory note)
+//           -> CANCELLED (employee withdrew before a decision)
+enum RequestStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  ORDER_CREATED
+}
+
+enum RecallStatus {
+  PENDING_EMPLOYEE
+  ACCEPTED
+  DECLINED
+  FINALIZED
+}
+
+// Two independent order-number sequences (հրց-<year>-<100|200+n>), matching the prototype's
+// convention: PRIMARY for ordinary leave orders, RECALL for early-return orders.
+enum OrderSeries {
+  PRIMARY
+  RECALL
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  role          Role
+  employee      Employee?      @relation(fields: [employeeId], references: [id])
+  employeeId    String?        @unique
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Employee {
+  id       String @id @default(cuid())
+  name     String
+  position String
+  email    String @unique
+
+  hireDate DateTime @db.Date
+
+  // հոդված 159, 160, 161 — three independent, HR-editable leave-day fields.
+  minimumDays    Int @default(0)
+  extendedDays   Int @default(0)
+  additionalDays Int @default(0)
+
+  // Derived (minimumDays + extendedDays + additionalDays), recomputed server-side on every write —
+  // persisted for query/display simplicity, never trusted as client input.
+  annualTotal Int @default(0)
+  balance     Int @default(0)
+
+  // Separate internal "day off" pool — independent of statutory vacation balance.
+  dayOffBalance Int @default(0)
+
+  // հոդված 164.10 — 2.5-year silent-employee reminder cadence bookkeeping.
+  lastVacationRequestDate DateTime? @db.Date
+  lastReminderFired       Int?
+
+  // HR manual override: "the >=10-business-day chunk requirement is already satisfied" (հոդված 163).
+  tenDayChunkConfirmed Boolean @default(false)
+
+  // հոդված 164.4, 164.6, 164.8-9 — informational priority-scheduling flags (not enforced as hard blocks).
+  priorityUnder18          Boolean @default(false)
+  priorityParentOrPregnant Boolean @default(false)
+  priorityTeacher          Boolean @default(false)
+  priorityCaregiver        Boolean @default(false)
+  priorityViolenceVictim   Boolean @default(false)
+
+  user               User?
+  requests           Request[]
+  balanceAdjustments BalanceAdjustmentLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("employees")
+}
+
+model Request {
+  id         String @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  type   RequestType
+  start  DateTime      @db.Date
+  end    DateTime      @db.Date
+  days   Int
+  reason String?
+  status RequestStatus @default(SUBMITTED)
+
+  orderNumber String?
+
+  history RequestHistory[]
+  recall  Recall?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, status])
+  @@index([status])
+  @@map("requests")
+}
+
+model RequestHistory {
+  id        String  @id @default(cuid())
+  requestId String
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  // Exact Armenian step text, mirrors the prototype's Timeline entries verbatim.
+  step             String
+  actorUserId      String? // null for system/cron-originated entries
+  actorDisplayName String // snapshotted so it survives a later user rename/deletion
+  note             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId])
+  @@map("request_history")
+}
+
+model Recall {
+  id        String  @id @default(cuid())
+  requestId String  @unique
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  requestedEnd DateTime     @db.Date
+  reason       String
+  status       RecallStatus @default(PENDING_EMPLOYEE)
+  requestedAt  DateTime     @default(now())
+  orderNumber  String?
+
+  @@map("recalls")
+}
+
+// Singleton row (id fixed at 1) — company/director/HR contact info applied to every generated order.
+model OrgSettings {
+  id                   Int    @id @default(1)
+  companyName          String
+  address              String
+  phone                String
+  email                String
+  directorName         String
+  directorSignatureKey String? // S3 object key, not base64
+  hrName               String
+  hrEmail              String
+
+  updatedAt DateTime @updatedAt
+
+  @@map("org_settings")
+}
+
+// Atomic per-year/per-series order-number counter — replaces the prototype's
+// non-concurrency-safe in-memory `requests.filter(...).length` count.
+model OrderSequence {
+  id        String      @id @default(cuid())
+  year      Int
+  series    OrderSeries
+  lastValue Int         @default(0)
+
+  @@unique([year, series])
+  @@map("order_sequences")
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  text             String
+  relatedRequestId String?
+  read             Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model BalanceAdjustmentLog {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  field           String // "balance" | "dayOffBalance"
+  previousValue   Int
+  nextValue       Int
+  changedByUserId String
+
+  createdAt DateTime @default(now())
+
+  @@index([employeeId])
+  @@map("balance_adjustment_log")
+}
+
+model AuditLog {
+  id          String @id @default(cuid())
+  actorUserId String
+  action      String // e.g. "employee.update", "org-settings.update"
+  entityType  String
+  entityId    String
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_log")
+}
