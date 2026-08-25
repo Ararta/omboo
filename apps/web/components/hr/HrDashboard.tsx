@@ -22,7 +22,7 @@ export function HrDashboard() {
   }, []);
 
   const NAV_SECTIONS = [
-    { id: "org", label: "Կազմակերպության տվյալներ", icon: Building2, render: () => <OrgSettingsSection mode="always" onConfiguredChange={setOrgConfigured} /> },
+    { id: "org", label: "Կազմակերպության տվյալներ", icon: Building2, render: () => <OrgSettingsSection onConfiguredChange={setOrgConfigured} /> },
     { id: "employees", label: "Աշխատողների կառավարում", icon: Users, render: () => <EmployeesSection /> },
     { id: "reminders", label: "2,5-ամյա ժամկետ", icon: Clock, render: () => <ReminderSection /> },
     { id: "orders", label: "Հրամանի կազմում", icon: FileSignature, render: () => <OrdersSection /> },

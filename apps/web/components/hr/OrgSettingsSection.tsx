@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, X } from "lucide-react";
+import { Building2, Mail, Pencil, Phone, User } from "lucide-react";
 import type { OrgSettingsInput } from "@omboo/shared";
 import { api } from "../../lib/api-client";
 import type { OrgSettingsView } from "../../lib/types";
@@ -18,22 +18,32 @@ const FIELD_LABELS: Record<keyof OrgSettingsInput, string> = {
 };
 
 interface Props {
-  /** "auto" (default): renders inline only until the org is configured, then disappears for good.
-   *  "always": always renders — used for the sidebar-triggered edit modal. */
-  mode?: "auto" | "always";
   onConfiguredChange?: (configured: boolean) => void;
-  onClose?: () => void;
 }
 
-export function OrgSettingsSection({ mode = "auto", onConfiguredChange, onClose }: Props) {
+function InfoCell({ icon: Icon, label, value }: { icon: typeof Building2; label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-paper/60 px-3.5 py-3">
+      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted">
+        <Icon size={12} />
+        {label}
+      </div>
+      <div className="text-[14px] font-semibold text-ink">{value || "—"}</div>
+    </div>
+  );
+}
+
+export function OrgSettingsSection({ onConfiguredChange }: Props) {
   const [org, setOrg] = useState<OrgSettingsView | null>(null);
   const [form, setForm] = useState<OrgSettingsInput | null>(null);
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
 
   async function load() {
     const data = await api.get<OrgSettingsView>("/org-settings");
+    const configured = data.companyName.trim().length > 0;
     setOrg(data);
     setForm({
       companyName: data.companyName,
@@ -44,7 +54,8 @@ export function OrgSettingsSection({ mode = "auto", onConfiguredChange, onClose 
       hrName: data.hrName,
       hrEmail: data.hrEmail,
     });
-    onConfiguredChange?.(data.companyName.trim().length > 0);
+    setEditing((prev) => prev && configured ? prev : !configured);
+    onConfiguredChange?.(configured);
   }
 
   useEffect(() => {
@@ -60,12 +71,14 @@ export function OrgSettingsSection({ mode = "auto", onConfiguredChange, onClose 
       await api.patch("/org-settings", form);
       await load();
       setStatus("saved");
-      if (onClose) setTimeout(() => onClose(), 900);
+      setTimeout(() => {
+        setEditing(false);
+        setStatus("idle");
+      }, 900);
     } catch {
       setStatus("error");
     } finally {
       setSaving(false);
-      if (!onClose) setTimeout(() => setStatus("idle"), 3000);
     }
   }
 
@@ -81,19 +94,71 @@ export function OrgSettingsSection({ mode = "auto", onConfiguredChange, onClose 
     }
   }
 
-  if (!org || !form) return mode === "always" ? <Card className="mb-5 text-sm text-muted">Բեռնվում է…</Card> : null;
-  if (mode === "auto" && org.companyName.trim().length > 0) return null;
+  if (!org || !form) return <Card className="mb-5 text-sm text-muted">Բեռնվում է…</Card>;
+
+  if (!editing) {
+    return (
+      <Card className="mb-5">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-seal">
+              <Building2 size={13} />
+              Կազմակերպության տվյալներ
+            </div>
+            <div className="font-serif text-[22px] font-extrabold text-ink">{org.companyName}</div>
+            <div className="text-[12.5px] text-muted">{org.address}</div>
+          </div>
+          <button
+            onClick={() => setEditing(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-white px-3 py-2 text-[13px] font-semibold text-ink transition hover:bg-paper"
+          >
+            <Pencil size={14} />
+            Խմբագրել
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <InfoCell icon={Phone} label="Հեռախոս" value={org.phone} />
+          <InfoCell icon={Mail} label="Էլ. փոստ" value={org.email} />
+          <InfoCell icon={User} label="Տնoրեն" value={org.directorName} />
+          <InfoCell icon={User} label="ՄՌԿ մասնագետ" value={`${org.hrName} · ${org.hrEmail}`} />
+        </div>
+
+        {org.directorSignatureUrl && (
+          <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-line bg-paper/60 px-3.5 py-3">
+            <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted">Ստորագրություն</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={org.directorSignatureUrl} alt="ստորագրություն" className="h-9 rounded border border-line bg-white" />
+          </div>
+        )}
+      </Card>
+    );
+  }
 
   return (
     <Card className="mb-5">
       <div className="mb-1 flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5">
-          <FileText size={15} className="text-seal" />
+          <Building2 size={15} className="text-seal" />
           <div className="font-serif text-[17px] text-ink">Կազմակերպության տվյալներ</div>
         </div>
-        {onClose && (
-          <button onClick={onClose} aria-label="Փակել" className="text-muted hover:text-ink">
-            <X size={16} />
+        {org.companyName.trim().length > 0 && (
+          <button
+            onClick={() => {
+              setForm({
+                companyName: org.companyName,
+                address: org.address,
+                phone: org.phone,
+                email: org.email,
+                directorName: org.directorName,
+                hrName: org.hrName,
+                hrEmail: org.hrEmail,
+              });
+              setEditing(false);
+            }}
+            className="text-[12.5px] font-semibold text-muted hover:text-ink"
+          >
+            Չեղարկել
           </button>
         )}
       </div>
