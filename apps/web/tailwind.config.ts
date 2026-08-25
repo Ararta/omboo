@@ -12,7 +12,8 @@ const config: Config = {
         muted: "#7C8092",
       },
       fontFamily: {
-        serif: ["Georgia", "Times New Roman", "serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        serif: ["var(--font-serif)", "Georgia", "serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
     },

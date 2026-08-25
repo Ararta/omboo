@@ -31,13 +31,16 @@ export class EmployeesService {
     const email = dto.email || "";
     const temporaryPassword = email ? randomBytes(6).toString("base64url") : null;
     const passwordHash = temporaryPassword ? await bcrypt.hash(temporaryPassword, 10) : null;
+    // `Employee.email` is @unique, so employees without a real email each need a distinct
+    // placeholder — a shared literal like "—" would collide on the second such employee.
+    const employeeEmail = email || `no-email-${randomBytes(4).toString("hex")}@omboo.local`;
 
     const employee = await this.prisma.client.$transaction(async (tx) => {
       const created = await tx.employee.create({
         data: {
           name: dto.name,
           position: dto.position,
-          email: email || "—",
+          email: employeeEmail,
           hireDate: new Date(dto.hireDate),
           minimumDays: dto.minimumDays,
           extendedDays: dto.extendedDays,

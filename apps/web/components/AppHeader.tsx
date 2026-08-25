@@ -15,8 +15,8 @@ export function AppHeader({ eyebrow, title }: { eyebrow: string; title: string }
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <div className="mb-1 text-[11px] uppercase tracking-widest text-muted">{eyebrow}</div>
-        <div className="font-serif text-[26px] font-bold text-ink">{title}</div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-seal">{eyebrow}</div>
+        <div className="font-serif text-[30px] font-extrabold tracking-tight text-ink">{title}</div>
       </div>
       <div className="flex items-center gap-2.5">
         <NotificationBell />

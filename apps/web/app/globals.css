@@ -9,5 +9,5 @@
 body {
   background: #f7f6f2;
   color: #1b2a4a;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
