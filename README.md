@@ -17,7 +17,7 @@ for the full Armenian Labor Code rule set this system implements.
 
 - Node.js 20+
 - [pnpm](https://pnpm.io) (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — for local Postgres + MinIO. **Not installed in the environment this was built in** — install it before following the steps below.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — for local Postgres + MinIO. On Windows this needs WSL2; if `docker` isn't found after installing, enable the `Microsoft-Windows-Subsystem-Linux` and `VirtualMachinePlatform` Windows features, reboot, then run `wsl --update --web-download` (the plain Microsoft Store-backed `wsl --update` can hang indefinitely in some environments — the `--web-download` variant fetches the kernel MSI directly and is more reliable).
 
 ## First-time setup
 
@@ -25,14 +25,16 @@ for the full Armenian Labor Code rule set this system implements.
 pnpm install
 cp .env.example .env
 docker compose up -d
-pnpm --filter @omboo/database db:migrate
+pnpm --filter @omboo/database db:migrate:deploy
 pnpm --filter @omboo/database db:seed
 ```
 
-`db:migrate` creates the initial migration on first run (there is no committed migration yet
-— it was never generated in the build environment, which had no Docker). `db:seed` mirrors
-the prototype's three demo employees and creates one login per role, all with the password
-`omboo1234`:
+The initial migration (`packages/database/prisma/migrations/20260825110516_init`) is committed
+and was applied to a real local Postgres instance as part of verifying this build — use
+`db:migrate:deploy` to apply it as-is. (`db:migrate` — i.e. `prisma migrate dev` — is only for
+when you're changing `schema.prisma` yourself and want Prisma to generate a new migration.)
+`db:seed` mirrors the prototype's three demo employees and creates one login per role, all with
+the password `omboo1234`:
 
 | Role | Email |
 |---|---|
@@ -48,10 +50,22 @@ the prototype's three demo employees and creates one login per role, all with th
 pnpm dev
 ```
 
-Runs every app in parallel via Turborepo: API on `:4000`, web on `:3000`. Open
-`http://localhost:3000` — you'll land on `/login`.
+Runs every app in parallel via Turborepo: API on `:4000`, web on `:3000`. `pnpm dev` builds
+`packages/shared`/`packages/database` first automatically (see the bug notes below for why
+that matters), so this one command is enough on a fresh clone. Open `http://localhost:3000` —
+you'll land on `/login`.
 
-Individually: `pnpm --filter @omboo/api start:dev`, `pnpm --filter @omboo/web dev`, `pnpm --filter @omboo/mobile start` (then press `i`/`a` for iOS/Android simulator, or scan the QR code with Expo Go). Mobile talks to the API directly (not through a proxy like web) — set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` to your machine's LAN IP (not `localhost`) if testing on a physical device.
+Individually, use turbo's `--filter` (not plain `pnpm --filter`, which skips the `^build`
+dependency and will hit the module-resolution bug described below): `pnpm turbo run dev --filter=@omboo/api`,
+`pnpm turbo run dev --filter=@omboo/web`. Mobile has no build-order dependency issue, so plain
+`pnpm --filter @omboo/mobile start` is fine (then press `i`/`a` for iOS/Android simulator, or
+scan the QR code with Expo Go) — it talks to the API directly (not through a proxy like web),
+so set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` to your machine's LAN IP (not `localhost`)
+if testing on a physical device.
+
+Each app's own `apps/*/.env` (or `.env.local` for web) needs the same values as the root
+`.env` — copy it in (`cp .env apps/api/.env && cp .env apps/web/.env.local`) since `apps/api`
+and `apps/web` each read env vars from their own directory, not the monorepo root.
 
 ## Email and file storage in local dev
 
@@ -75,22 +89,29 @@ anything in `packages/shared/src`, run this before anything else.
 
 ## What's done vs. what's follow-up work
 
-Built and verified in this pass:
+Built and verified in this pass — **including a real end-to-end run** against Postgres + MinIO in Docker (not just static typechecks): logged in as all three seeded roles through the actual browser UI, submitted a vacation request (and watched the client-side հոդված 163 chunk-rule check correctly block one combination of dates before a valid one was accepted), approved it as director, generated and Puppeteer-rendered a signed order PDF as HR, downloaded it, and ran a full recall (request → employee accepts → HR finalizes → balance restored) — all against real seeded data, with the 164.10 reminder panel correctly showing live-computed overdue/remaining days for the seeded employees.
 
-- Full monorepo scaffold, Prisma schema, seed script.
+- Full monorepo scaffold, Prisma schema (migration applied to a real Postgres instance), seed script (ran successfully).
 - `packages/shared` business logic — **39 unit tests passing**, including the edge cases above.
-- `apps/api` — auth (JWT + refresh rotation), employees, requests (all mutations transactional), orders (atomic order-number sequence, Puppeteer PDF, Resend email), recalls, the հոդված 164.10 reminder cron, org settings, S3-compatible signature storage. **Typechecks clean.**
-- `apps/web` — login, role-gated routing via middleware, employee/director/HR screens covering the full submit → approve → sign-order → recall workflow, ported design system (Seal, StatusPill, Timeline, INK/PAPER/SEAL/LINE/MUTED tokens).
-- `apps/mobile` — Expo Router app, same `@omboo/shared` rule engine and API contract as web. Employee: balance seals, submit/cancel requests, respond to recalls, request detail with Timeline. Director: approve/reject with mandatory rejection note, team-out. Auth tokens live in `expo-secure-store` (OS keychain/keystore), not cookies. **Typechecks clean.**
+- `apps/api` — auth (JWT + refresh rotation), employees, requests (all mutations transactional), orders (atomic order-number sequence, Puppeteer PDF, Resend email), recalls, the հոդված 164.10 reminder cron, org settings, S3-compatible signature storage. **Booted against a real database and exercised end-to-end**, including a real generated PDF (verified byte-for-byte correct Armenian legal-document text).
+- `apps/web` — login, role-gated routing via middleware, employee/director/HR screens covering the full submit → approve → sign-order → recall workflow, ported design system (Seal, StatusPill, Timeline, INK/PAPER/SEAL/LINE/MUTED tokens). **Clicked through in a real browser** as all three roles.
+- `apps/mobile` — Expo Router app, same `@omboo/shared` rule engine and API contract as web. Employee: balance seals, submit/cancel requests, respond to recalls, request detail with Timeline. Director: approve/reject with mandatory rejection note, team-out. Auth tokens live in `expo-secure-store` (OS keychain/keystore), not cookies. **Typechecks clean; not yet run in a simulator/device** (see follow-up below).
+
+Two real runtime bugs were found and fixed during this end-to-end pass (both invisible to `tsc`/`next build`, since TypeScript resolves module graphs differently than Node does at runtime):
+
+- `packages/shared` and `packages/database` originally pointed their `package.json` `main`/`types` at raw `.ts` source. Next.js's webpack could resolve that (with a `resolve.extensionAlias` config in `next.config.mjs`), but plain Node.js — how `apps/api` actually runs — could not resolve the NodeNext-style `.js`-import-pointing-at-`.ts`-file convention at all when loading `@omboo/shared` directly. Fixed by having both packages build to a real `dist/` and pointing `package.json` there instead — the correct pattern for an internal package consumed by both a bundler and plain Node.
+- Even after that fix, `@omboo/database`'s `prisma` named export came back `undefined` specifically when `require()`'d from `apps/api`'s CommonJS output (it worked fine via native ESM `import()`) — a real limitation of Node's synchronous `require(esm)` interop when a local `export const` is followed by `export * from`. Fixed by compiling `packages/database` as plain CommonJS instead of ESM, since it's only ever consumed by the Node-only API.
+- `turbo.json`'s `dev` task now depends on `^build`, so `pnpm dev` builds `packages/shared`/`packages/database` first automatically — without this, every fresh clone would hit the exact bug above.
 
 Explicit follow-up (not attempted, or not verifiable, in this pass):
 
-- **No live end-to-end run, on any platform.** Docker was not installed in the build environment, so `docker compose up`, migrations, and the actual submit→approve→order→PDF→email flow have not been executed against a real database. Verification here was static: `packages/shared`'s unit tests, `tsc --noEmit` / `next build` for api and web, `tsc --noEmit` for mobile. Mobile additionally has never been run in Metro/a simulator/Expo Go — there is no environment here with a simulator or device to test against. Run the steps above and click through all three apps yourself before trusting this in front of anyone.
+- **`apps/mobile` has never been run in Metro/a simulator/Expo Go** — there was no simulator or device in this environment. Typechecks clean, but that doesn't catch runtime module-resolution issues the same class as the two bugs above; test on a real device/simulator before trusting it.
 - **Mobile date inputs are plain text fields** (`YYYY-MM-DD`), not a native date picker — kept dependency-light since there was no simulator here to tune a native picker against. Swapping in `@react-native-community/datetimepicker` is a natural follow-up.
 - **Mobile has no offline/error-boundary handling beyond per-screen try/catch** — acceptable for an MVP, not for a store release.
 - HR has no mobile screens (by design, see the build plan) — an HR account can log in on mobile but is told to use the web app.
 - Full e2e/load testing, CI/CD, production deployment/secrets/hosting configuration, mobile app-store polish (icons, splash screen, EAS build/submit config) — all out of scope for this pass, as flagged in the build plan up front.
 - No password-reset/invite-email flow — `POST /employees` returns a one-time temporary password in the response; there's no email delivery of it yet.
+- Email sending was verified only in its disabled/logged mode (`EMAIL_SEND_ENABLED=false`) — a real `RESEND_API_KEY` send has not been tested.
 
 ## A few corrections made against the prototype
 
