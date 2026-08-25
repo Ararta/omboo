@@ -8,6 +8,10 @@ const STATUS_MAP: Record<RequestStatus, { text: string; bg: string; fg: string }
   ORDER_CREATED: { text: "Հրամանը կազմված է", bg: "#EFE7F7", fg: "#6B3FA0" },
 };
 
+export const STATUS_LABELS: Record<RequestStatus, string> = Object.fromEntries(
+  Object.entries(STATUS_MAP).map(([k, v]) => [k, v.text]),
+) as Record<RequestStatus, string>;
+
 export function StatusPill({ status }: { status: RequestStatus }) {
   const s = STATUS_MAP[status];
   return (
