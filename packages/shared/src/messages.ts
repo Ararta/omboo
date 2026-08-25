@@ -14,7 +14,7 @@
  * since they read as an editing artifact rather than deliberate wording.
  */
 
-import { MIN_CHUNK_DAYS } from "./vacation-rules.js";
+import { MIN_CHUNK_DAYS } from "./constants.js";
 import type { RequestType } from "./types.js";
 
 export const REQUEST_TYPE_LABELS: Record<RequestType, string> = {
