@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import type { OrgSettingsInput } from "@omboo/shared";
 import { api } from "../../lib/api-client";
 import type { OrgSettingsView } from "../../lib/types";
@@ -17,11 +17,20 @@ const FIELD_LABELS: Record<keyof OrgSettingsInput, string> = {
   hrEmail: "ՄՌԿ մասնագետի էլ. փոստ",
 };
 
-export function OrgSettingsSection() {
+interface Props {
+  /** "auto" (default): renders inline only until the org is configured, then disappears for good.
+   *  "always": always renders — used for the sidebar-triggered edit modal. */
+  mode?: "auto" | "always";
+  onConfiguredChange?: (configured: boolean) => void;
+  onClose?: () => void;
+}
+
+export function OrgSettingsSection({ mode = "auto", onConfiguredChange, onClose }: Props) {
   const [org, setOrg] = useState<OrgSettingsView | null>(null);
   const [form, setForm] = useState<OrgSettingsInput | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
 
   async function load() {
     const data = await api.get<OrgSettingsView>("/org-settings");
@@ -35,20 +44,28 @@ export function OrgSettingsSection() {
       hrName: data.hrName,
       hrEmail: data.hrEmail,
     });
+    onConfiguredChange?.(data.companyName.trim().length > 0);
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save() {
     if (!form) return;
     setSaving(true);
+    setStatus("idle");
     try {
       await api.patch("/org-settings", form);
       await load();
+      setStatus("saved");
+      if (onClose) setTimeout(() => onClose(), 900);
+    } catch {
+      setStatus("error");
     } finally {
       setSaving(false);
+      if (!onClose) setTimeout(() => setStatus("idle"), 3000);
     }
   }
 
@@ -64,13 +81,21 @@ export function OrgSettingsSection() {
     }
   }
 
-  if (!org || !form) return <Card className="mb-5 text-sm text-muted">Բեռնվում է…</Card>;
+  if (!org || !form) return mode === "always" ? <Card className="mb-5 text-sm text-muted">Բեռնվում է…</Card> : null;
+  if (mode === "auto" && org.companyName.trim().length > 0) return null;
 
   return (
     <Card className="mb-5">
-      <div className="mb-1 flex items-center gap-1.5">
-        <FileText size={15} className="text-seal" />
-        <div className="font-serif text-[17px] text-ink">Կազմակերպության տվյալներ</div>
+      <div className="mb-1 flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <FileText size={15} className="text-seal" />
+          <div className="font-serif text-[17px] text-ink">Կազմակերպության տվյալներ</div>
+        </div>
+        {onClose && (
+          <button onClick={onClose} aria-label="Փակել" className="text-muted hover:text-ink">
+            <X size={16} />
+          </button>
+        )}
       </div>
       <div className="mb-3.5 text-[12.5px] text-muted">
         Այս տվյալները մուտքագրվում են մեկ անգամ և ավտոմատ կիրառվում են բոլոր գեներացվող հրամանների վրա։
@@ -104,13 +129,17 @@ export function OrgSettingsSection() {
           <img src={org.directorSignatureUrl} alt="ստորագրություն" className="h-8 rounded border border-line bg-white" />
         </div>
       )}
-      <button
-        onClick={save}
-        disabled={saving}
-        className="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        {saving ? "Պահպանվում է…" : "Պահպանել"}
-      </button>
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {saving ? "Պահպանվում է…" : "Պահպանել"}
+        </button>
+        {status === "saved" && <span className="text-[12.5px] text-green-700">Պահպանված է ✓</span>}
+        {status === "error" && <span className="text-[12.5px] text-red-700">Չհաջողվեց պահպանել, փորձեք կրկին</span>}
+      </div>
     </Card>
   );
 }
