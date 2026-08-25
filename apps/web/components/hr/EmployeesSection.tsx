@@ -264,7 +264,7 @@ export function EmployeesSection() {
                 onClick={() => addEmployee({ skipEmail: true })}
                 className="font-semibold text-seal underline hover:no-underline"
               >
-                Ավելացնե՞մ առանց email-ի
+                Ավելացնեմ ըստ Ձեր լրացվածի
               </button>
             )}
           </div>
