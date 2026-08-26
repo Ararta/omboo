@@ -1,6 +1,9 @@
-// Omboo — Phase 1 schema (vacation/absence request management)
-// See reference/Omboo_texnikakan_handznararagir.docx and reference/mrk_prototype_1.jsx
-// for the business rules this schema supports.
+// Omboo — multi-tenant schema. Every tenant table carries organizationId directly (not
+// derived through joins) so the Prisma Client Extension in packages/database/src/tenant-scope.ts
+// can apply one uniform filter everywhere, and so Postgres RLS policies (see
+// prisma/migrations/*_enable_rls/migration.sql) can reference a single flat column on every table.
+// See reference/Omboo_texnikakan_handznararagir.docx and reference/mrk_prototype_1.jsx for the
+// underlying business rules.
 
 datasource db {
   provider = "postgresql"
@@ -49,6 +52,33 @@ enum OrderSeries {
   RECALL
 }
 
+// One row per registered company. `slug` drives subdomain-based tenant resolution
+// (<slug>.omboo.am) in apps/web/middleware.ts.
+model Organization {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  users               User[]
+  employees           Employee[]
+  documents           EmployeeDocument[]
+  attendanceLogs      AttendanceLog[]
+  requests            Request[]
+  requestHistory      RequestHistory[]
+  recalls             Recall[]
+  orgSettings         OrgSettings?
+  orderSequences      OrderSequence[]
+  notifications       Notification[]
+  balanceAdjustments  BalanceAdjustmentLog[]
+  auditLogs           AuditLog[]
+  refreshTokens       RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
 model User {
   id           String  @id @default(cuid())
   email        String  @unique
@@ -58,13 +88,17 @@ model User {
   name         String?
 
   // Self-registered HR accounts start pending until a DIRECTOR approves them; seeded/
-  // employees.service.ts-created accounts default to false (already trusted).
+  // employees.service.ts-created accounts default to false (already trusted). Organization
+  // founders (register-organization) are also false — nobody exists yet to approve them.
   pendingApproval Boolean @default(false)
 
   // TOTP two-factor, required for HR/DIRECTOR ("backend") logins once enabled. The secret is
   // written as soon as setup starts but totpEnabled only flips true after a confirmed code.
   totpSecret  String?
   totpEnabled Boolean @default(false)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   employee      Employee?      @relation(fields: [employeeId], references: [id])
   employeeId    String?        @unique
@@ -73,6 +107,7 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
+  @@index([organizationId])
   @@map("users")
 }
 
@@ -85,7 +120,11 @@ model RefreshToken {
   revokedAt DateTime?
   createdAt DateTime  @default(now())
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   @@index([userId])
+  @@index([organizationId])
   @@map("refresh_tokens")
 }
 
@@ -93,7 +132,8 @@ model Employee {
   id       String @id @default(cuid())
   name     String
   position String
-  email    String @unique
+  // Was globally @unique pre-multi-tenant; now unique per organization (see @@unique below).
+  email    String
 
   hireDate DateTime @db.Date
 
@@ -130,6 +170,9 @@ model Employee {
   manager   Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
   reports   Employee[] @relation("EmployeeManager")
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   user               User?
   requests           Request[]
   balanceAdjustments BalanceAdjustmentLog[]
@@ -139,6 +182,8 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, email])
+  @@index([organizationId])
   @@map("employees")
 }
 
@@ -151,7 +196,8 @@ enum DocumentCategory {
 }
 
 // HR document library — one row per uploaded file, always scoped to one employee (company-wide
-// documents aren't in scope yet). The file itself lives in S3/MinIO; this row is metadata only.
+// documents aren't in scope yet). The file itself lives in S3/MinIO under a
+// documents/<organizationId>/<employeeId>/... key; this row is metadata only.
 model EmployeeDocument {
   id         String @id @default(cuid())
   employeeId String
@@ -166,9 +212,13 @@ model EmployeeDocument {
 
   uploadedByUserId String
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   @@index([employeeId])
+  @@index([organizationId])
   @@map("employee_documents")
 }
 
@@ -198,10 +248,14 @@ model AttendanceLog {
   editedAt       DateTime?
   note           String?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([employeeId, checkInAt])
+  @@index([organizationId])
   @@map("attendance_logs")
 }
 
@@ -219,6 +273,9 @@ model Request {
 
   orderNumber String?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   history RequestHistory[]
   recall  Recall?
 
@@ -227,6 +284,7 @@ model Request {
 
   @@index([employeeId, status])
   @@index([status])
+  @@index([organizationId])
   @@map("requests")
 }
 
@@ -241,9 +299,13 @@ model RequestHistory {
   actorDisplayName String // snapshotted so it survives a later user rename/deletion
   note             String?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   @@index([requestId])
+  @@index([organizationId])
   @@map("request_history")
 }
 
@@ -258,12 +320,20 @@ model Recall {
   requestedAt  DateTime     @default(now())
   orderNumber  String?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
   @@map("recalls")
 }
 
-// Singleton row (id fixed at 1) — company/director/HR contact info applied to every generated order.
+// One row per organization (was a singleton `id=1` row pre-multi-tenant) — company/director/HR
+// contact info applied to every generated order. organizationId is now the primary key (1:1
+// with Organization) now that the backfill migration has populated it on every row.
 model OrgSettings {
-  id                   Int    @id @default(1)
+  organizationId String       @id
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   companyName          String
   address              String
   phone                String
@@ -285,7 +355,7 @@ model OrgSettings {
   @@map("org_settings")
 }
 
-// Atomic per-year/per-series order-number counter — replaces the prototype's
+// Atomic per-organization/year/series order-number counter — replaces the prototype's
 // non-concurrency-safe in-memory `requests.filter(...).length` count.
 model OrderSequence {
   id        String      @id @default(cuid())
@@ -293,7 +363,11 @@ model OrderSequence {
   series    OrderSeries
   lastValue Int         @default(0)
 
-  @@unique([year, series])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, year, series])
+  @@index([organizationId])
   @@map("order_sequences")
 }
 
@@ -306,9 +380,13 @@ model Notification {
   relatedRequestId String?
   read             Boolean @default(false)
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   @@index([userId, read])
+  @@index([organizationId])
   @@map("notifications")
 }
 
@@ -322,9 +400,13 @@ model BalanceAdjustmentLog {
   nextValue       Int
   changedByUserId String
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   @@index([employeeId])
+  @@index([organizationId])
   @@map("balance_adjustment_log")
 }
 
@@ -336,8 +418,12 @@ model AuditLog {
   entityId    String
   metadata    Json?
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   @@index([entityType, entityId])
+  @@index([organizationId])
   @@map("audit_log")
 }

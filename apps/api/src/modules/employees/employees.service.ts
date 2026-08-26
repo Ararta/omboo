@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import * as bcrypt from "bcryptjs";
-import { Prisma } from "@omboo/database";
+import { Prisma, getOrgId } from "@omboo/database";
 import type { CreateEmployeeInput, UpdateEmployeeInput } from "@omboo/shared";
 import { notifications } from "@omboo/shared";
 import { PrismaService } from "../../common/prisma/prisma.service";
@@ -36,11 +36,13 @@ export class EmployeesService {
     // placeholder — a shared literal like "—" would collide on the second such employee.
     const employeeEmail = email || `no-email-${randomBytes(4).toString("hex")}@omboo.local`;
 
+    const organizationId = getOrgId();
     let employee;
     try {
       employee = await this.prisma.client.$transaction(async (tx) => {
         const created = await tx.employee.create({
           data: {
+            organizationId,
             name: dto.name,
             position: dto.position,
             email: employeeEmail,
@@ -56,11 +58,12 @@ export class EmployeesService {
         });
         if (email && passwordHash) {
           await tx.user.create({
-            data: { email, passwordHash, role: "EMPLOYEE", employeeId: created.id },
+            data: { organizationId, email, passwordHash, role: "EMPLOYEE", employeeId: created.id },
           });
         }
         await tx.balanceAdjustmentLog.create({
           data: {
+            organizationId,
             employeeId: created.id,
             field: "balance",
             previousValue: 0,
@@ -72,7 +75,7 @@ export class EmployeesService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        const owner = await this.prisma.client.employee.findUnique({ where: { email }, select: { name: true, position: true } });
+        const owner = await this.prisma.client.employee.findFirst({ where: { email }, select: { name: true, position: true } });
         throw new ConflictException(
           owner
             ? `Այս էլ. փոստն արդեն կապված է ${owner.name}-ի (${owner.position}) հաշվին։`
@@ -144,7 +147,7 @@ export class EmployeesService {
     await this.prisma.client.$transaction(async (tx) => {
       await tx.employee.update({ where: { id }, data: { balance: nextBalance } });
       await tx.balanceAdjustmentLog.create({
-        data: { employeeId: id, field: "balance", previousValue: previous, nextValue: nextBalance, changedByUserId },
+        data: { organizationId: getOrgId(), employeeId: id, field: "balance", previousValue: previous, nextValue: nextBalance, changedByUserId },
       });
       await this.notificationsService.notifyEmployee(tx, id, notifications.balanceManuallyAdjusted(nextBalance));
     });

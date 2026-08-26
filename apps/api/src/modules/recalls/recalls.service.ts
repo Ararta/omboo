@@ -10,6 +10,7 @@ import {
   validationMessages,
   type RecallRequestInput,
 } from "@omboo/shared";
+import { getOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { DomainValidationError } from "../../common/errors/domain-validation.error";
@@ -59,12 +60,26 @@ export class RecallsService {
       throw new DomainValidationError("RECALL_END_NOT_BEFORE_ORIGINAL", validationMessages.recallRequestedEndMustPrecedeOriginalEnd);
     }
 
+    const organizationId = getOrgId();
     return this.prisma.client.$transaction(async (tx) => {
       await tx.recall.create({
-        data: { requestId, requestedEnd: new Date(dto.requestedEnd), reason: dto.reason, status: "PENDING_EMPLOYEE" },
+        data: {
+          organizationId,
+          requestId,
+          requestedEnd: new Date(dto.requestedEnd),
+          reason: dto.reason,
+          status: "PENDING_EMPLOYEE",
+        },
       });
       await tx.requestHistory.create({
-        data: { requestId, step: historySteps.recallRequested, actorUserId: null, actorDisplayName: HR_ACTOR, note: dto.reason },
+        data: {
+          organizationId,
+          requestId,
+          step: historySteps.recallRequested,
+          actorUserId: null,
+          actorDisplayName: HR_ACTOR,
+          note: dto.reason,
+        },
       });
       await this.notificationsService.notifyEmployee(
         tx,
@@ -92,7 +107,7 @@ export class RecallsService {
     return this.prisma.client.$transaction(async (tx) => {
       await tx.recall.update({ where: { requestId }, data: { status } });
       await tx.requestHistory.create({
-        data: { requestId, step, actorUserId: null, actorDisplayName: request.employee.name },
+        data: { organizationId: getOrgId(), requestId, step, actorUserId: null, actorDisplayName: request.employee.name },
       });
       const text = accept
         ? notifications.recallAcceptedForHR(request.employee.name)
@@ -117,19 +132,26 @@ export class RecallsService {
     );
     const year = new Date().getFullYear();
     const requestedEndDate = request.recall.requestedEnd;
+    const organizationId = getOrgId();
 
     return this.prisma.client.$transaction(async (tx) => {
       const seq = await tx.orderSequence.upsert({
-        where: { year_series: { year, series: "RECALL" } },
+        where: { organizationId_year_series: { organizationId, year, series: "RECALL" } },
         update: { lastValue: { increment: 1 } },
-        create: { year, series: "RECALL", lastValue: 1 },
+        create: { organizationId, year, series: "RECALL", lastValue: 1 },
       });
       const orderNumber = formatOrderNumber(year, "RECALL", seq.lastValue);
 
       await tx.request.update({ where: { id: requestId }, data: { end: requestedEndDate, days: newDays } });
       await tx.recall.update({ where: { requestId }, data: { status: "FINALIZED", orderNumber } });
       await tx.requestHistory.create({
-        data: { requestId, step: historySteps.recallOrderCreated(orderNumber), actorUserId: null, actorDisplayName: HR_ACTOR },
+        data: {
+          organizationId,
+          requestId,
+          step: historySteps.recallOrderCreated(orderNumber),
+          actorUserId: null,
+          actorDisplayName: HR_ACTOR,
+        },
       });
 
       if (delta > 0) {

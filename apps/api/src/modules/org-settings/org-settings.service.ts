@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { OrgSettings } from "@omboo/database";
+import { getOrgId } from "@omboo/database";
 import type { GeofenceSettingsInput, OrgSettingsInput } from "@omboo/shared";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { StorageService } from "../storage/storage.service";
@@ -19,26 +20,33 @@ export class OrgSettingsService {
   ) {}
 
   async get() {
-    const existing = await this.prisma.client.orgSettings.findUnique({ where: { id: 1 } });
+    const existing = await this.prisma.client.orgSettings.findUnique({ where: { organizationId: getOrgId() } });
     if (!existing) throw new NotFoundException("Կազմակերպության կարգավորումները դեռ սահմանված չեն։");
     return this.withSignatureUrl(existing);
   }
 
+  // upsert — a freshly registered organization has no OrgSettings row yet, so the first save
+  // (companyName/address/etc. — orgSettingsSchema always carries every required field) creates it.
   async update(dto: OrgSettingsInput) {
-    const updated = await this.prisma.client.orgSettings.update({ where: { id: 1 }, data: dto });
+    const organizationId = getOrgId();
+    const updated = await this.prisma.client.orgSettings.upsert({
+      where: { organizationId },
+      create: { organizationId, ...dto },
+      update: dto,
+    });
     return this.withSignatureUrl(updated);
   }
 
   async updateGeofence(dto: GeofenceSettingsInput) {
-    const updated = await this.prisma.client.orgSettings.update({ where: { id: 1 }, data: dto });
+    const updated = await this.prisma.client.orgSettings.update({ where: { organizationId: getOrgId() }, data: dto });
     return this.withSignatureUrl(updated);
   }
 
   async uploadSignature(file: Express.Multer.File) {
-    const key = `director-signature-${Date.now()}.${extFromMime(file.mimetype)}`;
+    const key = `signatures/${getOrgId()}/director-signature-${Date.now()}.${extFromMime(file.mimetype)}`;
     await this.storage.uploadObject(key, file.buffer, file.mimetype);
     const updated = await this.prisma.client.orgSettings.update({
-      where: { id: 1 },
+      where: { organizationId: getOrgId() },
       data: { directorSignatureKey: key },
     });
     return this.withSignatureUrl(updated);

@@ -1,9 +1,11 @@
-import { Module } from "@nestjs/common";
+import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
+import { JwtModule } from "@nestjs/jwt";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { PrismaModule } from "./common/prisma/prisma.module";
+import { TenantContextMiddleware } from "./common/middleware/tenant-context.middleware";
 import { AuthModule } from "./modules/auth/auth.module";
 import { EmployeesModule } from "./modules/employees/employees.module";
 import { RequestsModule } from "./modules/requests/requests.module";
@@ -24,6 +26,9 @@ import { DocumentsModule } from "./modules/documents/documents.module";
     // Global default: 100 requests / minute / IP. Auth endpoints (login, register, TOTP) set
     // their own much tighter @Throttle() to blunt credential-stuffing / brute-force attempts.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Separate registration from AuthModule's — used only by TenantContextMiddleware to verify
+    // the access token and read organizationId, same secret as JwtStrategy.
+    JwtModule.register({ secret: process.env.JWT_ACCESS_SECRET ?? "change-me-access-secret-dev-only" }),
     PrismaModule,
     AuthModule,
     EmployeesModule,
@@ -40,4 +45,8 @@ import { DocumentsModule } from "./modules/documents/documents.module";
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantContextMiddleware).forRoutes("*");
+  }
+}

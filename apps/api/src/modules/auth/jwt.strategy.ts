@@ -7,12 +7,14 @@ export interface JwtPayload {
   sub: string;
   role: Role;
   employeeId: string | null;
+  organizationId: string;
 }
 
 export interface AuthenticatedUser {
   userId: string;
   role: Role;
   employeeId: string | null;
+  organizationId: string;
 }
 
 @Injectable()
@@ -26,6 +28,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload): AuthenticatedUser {
-    return { userId: payload.sub, role: payload.role, employeeId: payload.employeeId };
+    return {
+      userId: payload.sub,
+      role: payload.role,
+      employeeId: payload.employeeId,
+      organizationId: payload.organizationId,
+    };
   }
 }

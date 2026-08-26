@@ -1,6 +1,13 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Req, Res, UnauthorizedException, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
-import { loginSchema, registerSchema, totpSetupConfirmSchema, totpVerifySchema } from "@omboo/shared";
+import {
+  loginSchema,
+  registerOrganizationSchema,
+  registerSchema,
+  totpSetupConfirmSchema,
+  totpVerifySchema,
+} from "@omboo/shared";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -11,19 +18,38 @@ import { refreshTtlMs } from "./token.util";
 const REFRESH_COOKIE = "omboo_refresh_token";
 const REFRESH_COOKIE_PATH = "/api/auth";
 
+// Tighter than the app-wide default — these are the endpoints a credential-stuffing or
+// TOTP brute-force attempt would actually hit.
+const AUTH_THROTTLE = { default: { limit: 8, ttl: 60_000 } };
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post("register-organization")
+  @HttpCode(201)
+  @Throttle(AUTH_THROTTLE)
+  async registerOrganization(
+    @Body(new ZodValidationPipe(registerOrganizationSchema))
+    dto: { organizationName: string; orgSlug: string; directorName: string; email: string; password: string },
+  ) {
+    await this.authService.registerOrganization(dto.organizationName, dto.orgSlug, dto.directorName, dto.email, dto.password);
+    return { ok: true };
+  }
+
   @Post("register")
   @HttpCode(201)
-  async register(@Body(new ZodValidationPipe(registerSchema)) dto: { name: string; email: string; password: string }) {
-    await this.authService.register(dto.name, dto.email, dto.password);
+  @Throttle(AUTH_THROTTLE)
+  async register(
+    @Body(new ZodValidationPipe(registerSchema)) dto: { name: string; email: string; password: string; orgSlug: string },
+  ) {
+    await this.authService.register(dto.name, dto.email, dto.password, dto.orgSlug);
     return { ok: true };
   }
 
   @Post("login")
   @HttpCode(200)
+  @Throttle(AUTH_THROTTLE)
   async login(@Body(new ZodValidationPipe(loginSchema)) dto: { email: string; password: string }, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto.email, dto.password);
     if ("refreshToken" in result) this.setRefreshCookie(res, result.refreshToken);
@@ -32,6 +58,7 @@ export class AuthController {
 
   @Post("totp/setup-confirm")
   @HttpCode(200)
+  @Throttle(AUTH_THROTTLE)
   async confirmTotpSetup(
     @Body(new ZodValidationPipe(totpSetupConfirmSchema)) dto: { setupToken: string; code: string },
     @Res({ passthrough: true }) res: Response,
@@ -43,6 +70,7 @@ export class AuthController {
 
   @Post("totp/verify")
   @HttpCode(200)
+  @Throttle(AUTH_THROTTLE)
   async verifyTotp(
     @Body(new ZodValidationPipe(totpVerifySchema)) dto: { challengeToken: string; code: string },
     @Res({ passthrough: true }) res: Response,

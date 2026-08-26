@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { buildOrderDocumentData, formatOrderNumber, historySteps, notifications, todayInYerevan } from "@omboo/shared";
+import { getOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { OrgSettingsService } from "../org-settings/org-settings.service";
@@ -42,7 +43,9 @@ export class OrdersService {
     if (request.status !== "APPROVED") throw new ForbiddenException("Հրաման կարելի է կազմել միայն հաստատված հայտ-դիմումի համար։");
     const org = await this.orgSettings.get();
     const year = new Date().getFullYear();
-    const seq = await this.prisma.client.orderSequence.findUnique({ where: { year_series: { year, series: "PRIMARY" } } });
+    const seq = await this.prisma.client.orderSequence.findUnique({
+      where: { organizationId_year_series: { organizationId: getOrgId(), year, series: "PRIMARY" } },
+    });
     const tentativeOrderNumber = formatOrderNumber(year, "PRIMARY", (seq?.lastValue ?? 0) + 1);
 
     return buildOrderDocumentData(
@@ -61,20 +64,28 @@ export class OrdersService {
     if (request.status !== "APPROVED") throw new ForbiddenException("Հրաման կարելի է կազմել միայն հաստատված հայտ-դիմումի համար։");
     const org = await this.orgSettings.get();
     const year = new Date().getFullYear();
+    const organizationId = getOrgId();
 
     const { orderNumber } = await this.prisma.client.$transaction(async (tx) => {
       const seq = await tx.orderSequence.upsert({
-        where: { year_series: { year, series: "PRIMARY" } },
+        where: { organizationId_year_series: { organizationId, year, series: "PRIMARY" } },
         update: { lastValue: { increment: 1 } },
-        create: { year, series: "PRIMARY", lastValue: 1 },
+        create: { organizationId, year, series: "PRIMARY", lastValue: 1 },
       });
       const orderNumber = formatOrderNumber(year, "PRIMARY", seq.lastValue);
       await tx.request.update({ where: { id: requestId }, data: { status: "ORDER_CREATED", orderNumber } });
       await tx.requestHistory.create({
-        data: { requestId, step: historySteps.orderCreated(orderNumber), actorUserId: null, actorDisplayName: HR_ACTOR },
+        data: {
+          organizationId,
+          requestId,
+          step: historySteps.orderCreated(orderNumber),
+          actorUserId: null,
+          actorDisplayName: HR_ACTOR,
+        },
       });
       await tx.requestHistory.create({
         data: {
+          organizationId,
           requestId,
           step: historySteps.orderSigned(orderNumber, org.directorName),
           actorUserId: null,

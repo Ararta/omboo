@@ -136,6 +136,9 @@ function LoginForm() {
               <Link href="/register" className="font-semibold text-seal underline">
                 Խնդրե՞լ մուտքի իրավունք ՄՌԿ մասնագետի համար
               </Link>
+              <Link href="/register-organization" className="font-semibold text-seal underline">
+                Նոր կազմակերպությո՞ւն եք ուզում գրանցել
+              </Link>
             </div>
           </>
         )}

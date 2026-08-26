@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { distanceMeters } from "@omboo/shared";
 import type { AttendanceManualCreateInput, AttendanceUpdateInput, GpsPointInput } from "@omboo/shared";
+import { getOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 
 @Injectable()
@@ -10,7 +11,7 @@ export class AttendanceService {
   /** Throws if a geofence is configured and `point` falls outside it. No-op (returns) when
    * HR hasn't set an office location yet — check-in/out is unrestricted until then. */
   private async assertWithinGeofence(point: GpsPointInput): Promise<void> {
-    const org = await this.prisma.client.orgSettings.findUnique({ where: { id: 1 } });
+    const org = await this.prisma.client.orgSettings.findUnique({ where: { organizationId: getOrgId() } });
     if (org?.officeLat == null || org?.officeLng == null) return;
 
     const distance = distanceMeters(point, { lat: org.officeLat, lng: org.officeLng });
@@ -31,6 +32,7 @@ export class AttendanceService {
     return this.prisma.client.attendanceLog.create({
       data: {
         employeeId,
+        organizationId: getOrgId(),
         checkInAt: new Date(),
         checkInLat: point.lat,
         checkInLng: point.lng,
@@ -150,6 +152,7 @@ export class AttendanceService {
     return this.prisma.client.attendanceLog.create({
       data: {
         employeeId: dto.employeeId,
+        organizationId: getOrgId(),
         checkInAt: new Date(dto.checkInAt),
         checkOutAt: dto.checkOutAt ? new Date(dto.checkOutAt) : null,
         note: dto.note,

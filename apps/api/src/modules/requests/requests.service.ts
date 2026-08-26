@@ -11,6 +11,7 @@ import {
   type DirectorDecisionInput,
   type HrScheduleVacationInput,
 } from "@omboo/shared";
+import { getOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { DomainValidationError } from "../../common/errors/domain-validation.error";
@@ -81,9 +82,11 @@ export class RequestsService {
     const result = validateSubmitRequest(dto, toEmployeeRuleContext(employee), existing.map(toRequestRuleContext), today);
     if (!result.ok) throw new DomainValidationError(result.code, result.message);
 
+    const organizationId = getOrgId();
     return this.prisma.client.$transaction(async (tx) => {
       const request = await tx.request.create({
         data: {
+          organizationId,
           employeeId,
           type: dto.type,
           start: new Date(dto.start),
@@ -95,6 +98,7 @@ export class RequestsService {
       });
       await tx.requestHistory.create({
         data: {
+          organizationId,
           requestId: request.id,
           step: historySteps.submitted,
           actorUserId: null,
@@ -129,7 +133,13 @@ export class RequestsService {
     return this.prisma.client.$transaction(async (tx) => {
       const updated = await tx.request.update({ where: { id: requestId }, data: { status: "CANCELLED" } });
       await tx.requestHistory.create({
-        data: { requestId, step: historySteps.cancelledByEmployee, actorUserId: null, actorDisplayName: employee.name },
+        data: {
+          organizationId: getOrgId(),
+          requestId,
+          step: historySteps.cancelledByEmployee,
+          actorUserId: null,
+          actorDisplayName: employee.name,
+        },
       });
       return updated;
     });
@@ -145,7 +155,14 @@ export class RequestsService {
     return this.prisma.client.$transaction(async (tx) => {
       const updated = await tx.request.update({ where: { id: requestId }, data: { status: dto.decision } });
       await tx.requestHistory.create({
-        data: { requestId, step, actorUserId: null, actorDisplayName: DIRECTOR_ACTOR, note: dto.note },
+        data: {
+          organizationId: getOrgId(),
+          requestId,
+          step,
+          actorUserId: null,
+          actorDisplayName: DIRECTOR_ACTOR,
+          note: dto.note,
+        },
       });
 
       if (dto.decision === "APPROVED") {
@@ -182,9 +199,11 @@ export class RequestsService {
     const end = addDaysISO(dto.start, Math.max(0, dto.days - 1));
     const today = todayInYerevan();
 
+    const organizationId = getOrgId();
     return this.prisma.client.$transaction(async (tx) => {
       const request = await tx.request.create({
         data: {
+          organizationId,
           employeeId: dto.employeeId,
           type: "VACATION",
           start: new Date(dto.start),
@@ -194,7 +213,13 @@ export class RequestsService {
         },
       });
       await tx.requestHistory.create({
-        data: { requestId: request.id, step: historySteps.hrScheduled, actorUserId: null, actorDisplayName: HR_ACTOR },
+        data: {
+          organizationId,
+          requestId: request.id,
+          step: historySteps.hrScheduled,
+          actorUserId: null,
+          actorDisplayName: HR_ACTOR,
+        },
       });
       const nextBalance = Math.max(0, employee.balance - dto.days);
       await tx.employee.update({

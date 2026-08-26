@@ -3,11 +3,12 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 
-export default function RegisterPage() {
-  const [name, setName] = useState("");
+export default function RegisterOrganizationPage() {
+  const [organizationName, setOrganizationName] = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
+  const [directorName, setDirectorName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [orgSlug, setOrgSlug] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -17,10 +18,10 @@ export default function RegisterPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/register-organization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, orgSlug }),
+        body: JSON.stringify({ organizationName, orgSlug, directorName, email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -38,12 +39,12 @@ export default function RegisterPage() {
       <div className="flex min-h-screen items-center justify-center bg-paper px-5">
         <div className="w-full max-w-sm rounded-[10px] border border-line bg-white p-8 text-center">
           <div className="mb-1 text-[11px] uppercase tracking-widest text-muted">Omboo · ՄՌԿ Թվային Հարթակ</div>
-          <div className="mb-3 font-serif text-2xl font-bold text-ink">Հայտն ուղարկված է</div>
+          <div className="mb-3 font-serif text-2xl font-bold text-ink">Կազմակերպությունը ստեղծված է</div>
           <p className="mb-6 text-sm text-muted">
-            Ձեր մուտքի հայտն ուղարկվեց տնoրենին։ Հաշիվը կակտիվանա հաստատումից հետո, և կկարողանաք մուտք գործել։
+            Այժմ կարող եք մուտք գործել որպես տնoրեն ձեր էլ. փոստով և գաղտնաբառով։
           </p>
           <Link href="/login" className="text-sm font-semibold text-seal underline">
-            Վերադառնալ մուտքի էջ
+            Մուտք գործել
           </Link>
         </div>
       </div>
@@ -54,13 +55,22 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-paper px-5">
       <div className="w-full max-w-sm rounded-[10px] border border-line bg-white p-8">
         <div className="mb-1 text-[11px] uppercase tracking-widest text-muted">Omboo · ՄՌԿ Թվային Հարթակ</div>
-        <div className="mb-1 font-serif text-2xl font-bold text-ink">Մուտքի հայտ</div>
+        <div className="mb-1 font-serif text-2xl font-bold text-ink">Նոր կազմակերպություն</div>
         <p className="mb-6 text-[12.5px] text-muted">
-          Հայտը ուղարկվում է տնoրենին հաստատման համար։ ՄՌԿ մասնագետի իրավունքով backend մուտքը հասանելի կլինի միայն հաստատումից հետո։
+          Գրանցեք ձեր կազմակերպությունը Omboo-ում։ Ձեր տվյալները մեկուսացված են այլ կազմակերպություններից։
         </p>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div>
-            <label className="mb-1 block text-[11.5px] text-muted">Կազմակերպության հասցե (slug)</label>
+            <label className="mb-1 block text-[11.5px] text-muted">Կազմակերպության անվանում</label>
+            <input
+              required
+              value={organizationName}
+              onChange={(e) => setOrganizationName(e.target.value)}
+              className="w-full rounded-md border border-line px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11.5px] text-muted">Հասցե (slug)</label>
             <input
               required
               placeholder="oրինակ՝ ararta"
@@ -69,14 +79,14 @@ export default function RegisterPage() {
               onChange={(e) => setOrgSlug(e.target.value.toLowerCase())}
               className="w-full rounded-md border border-line px-3 py-2 text-sm"
             />
-            <p className="mt-1 text-[11px] text-muted">Ձեր կազմակերպության եզակի հասցեն Omboo-ում (օր.՝ ararta.omboo.am)։</p>
+            <p className="mt-1 text-[11px] text-muted">Կդառնա ձեր հասցեն Omboo-ում (օր.՝ ararta.omboo.am)։</p>
           </div>
           <div>
-            <label className="mb-1 block text-[11.5px] text-muted">Անուն ազգանուն</label>
+            <label className="mb-1 block text-[11.5px] text-muted">Ձեր անուն ազգանունը (տնoրեն)</label>
             <input
               required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={directorName}
+              onChange={(e) => setDirectorName(e.target.value)}
               className="w-full rounded-md border border-line px-3 py-2 text-sm"
             />
           </div>
@@ -107,7 +117,7 @@ export default function RegisterPage() {
             type="submit"
             className="mt-2 rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {loading ? "…" : "Ուղարկել հայտը"}
+            {loading ? "…" : "Ստեղծել կազմակերպությունը"}
           </button>
         </form>
         <div className="mt-6 text-center text-[12.5px]">

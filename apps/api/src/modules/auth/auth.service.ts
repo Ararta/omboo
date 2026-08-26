@@ -4,6 +4,7 @@ import * as bcrypt from "bcryptjs";
 import { authenticator } from "otplib";
 import * as QRCode from "qrcode";
 import type { User } from "@omboo/database";
+import { runWithOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { generateRefreshToken, hashToken, refreshTtlMs } from "./token.util";
@@ -58,23 +59,60 @@ export class AuthService {
     return valid ? user : null;
   }
 
-  /** Self-registration for backend (HR) access — always creates a pending, unapproved HR
-   * account and notifies every DIRECTOR to review it. Never issues tokens directly. */
-  async register(name: string, email: string, password: string): Promise<void> {
+  /** Founds a brand-new organization on Omboo — creates the Organization and its first DIRECTOR
+   * account in one transaction. Auto-approved: there is no existing director to review them,
+   * they're the one founding the tenant. */
+  async registerOrganization(
+    organizationName: string,
+    orgSlug: string,
+    directorName: string,
+    email: string,
+    password: string,
+  ): Promise<void> {
+    const existingSlug = await this.prisma.client.organization.findUnique({ where: { slug: orgSlug } });
+    if (existingSlug) throw new ConflictException("Այս հասցեով (slug) կազմակերպություն արդեն գոյություն ունի։");
+    const existingEmail = await this.prisma.client.user.findUnique({ where: { email } });
+    if (existingEmail) throw new ConflictException("Այս էլ. փոստով հաշիվ արդեն գոյություն ունի։");
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await this.prisma.client.$transaction(async (tx) => {
+      const org = await tx.organization.create({ data: { name: organizationName, slug: orgSlug } });
+      await tx.user.create({
+        data: {
+          organizationId: org.id,
+          name: directorName,
+          email,
+          passwordHash,
+          role: "DIRECTOR",
+          pendingApproval: false,
+        },
+      });
+    });
+  }
+
+  /** Requests backend (HR) access to an organization that already exists on Omboo — always
+   * creates a pending, unapproved HR account and notifies only that organization's directors.
+   * Never issues tokens directly. Runs pre-auth (no ambient tenant context yet), so the
+   * notifyRole call is explicitly wrapped in the resolved org's context. */
+  async register(name: string, email: string, password: string, orgSlug: string): Promise<void> {
+    const org = await this.prisma.client.organization.findUnique({ where: { slug: orgSlug } });
+    if (!org) throw new ConflictException("Այս հասցեով (slug) կազմակերպություն չի գտնվել։");
     const existing = await this.prisma.client.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException("Այս էլ. փոստով հաշիվ արդեն գոյություն ունի։");
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await this.prisma.client.$transaction(async (tx) => {
-      await tx.user.create({
-        data: { name, email, passwordHash, role: "HR", pendingApproval: true },
-      });
-      await this.notificationsService.notifyRole(
-        tx,
-        "DIRECTOR",
-        `${name} (${email}) մուտքի հայտ է ուղարկել ՄՌԿ մասնագետի իրավունքների համար. սպասում է հաստատման։`,
-      );
-    });
+    await runWithOrgId(org.id, () =>
+      this.prisma.client.$transaction(async (tx) => {
+        await tx.user.create({
+          data: { organizationId: org.id, name, email, passwordHash, role: "HR", pendingApproval: true },
+        });
+        await this.notificationsService.notifyRole(
+          tx,
+          "DIRECTOR",
+          `${name} (${email}) մուտքի հայտ է ուղարկել ՄՌԿ մասնագետի իրավունքների համար. սպասում է հաստատման։`,
+        );
+      }),
+    );
   }
 
   async login(email: string, password: string): Promise<LoginResult> {
@@ -137,7 +175,11 @@ export class AuthService {
   async approvePendingUser(id: string): Promise<void> {
     const user = await this.prisma.client.user.update({ where: { id }, data: { pendingApproval: false } });
     await this.prisma.client.notification.create({
-      data: { userId: user.id, text: "Ձեր մուտքի հայտը հաստատվել է տնoրենի կողմից։ Այժմ կարող եք մուտք գործել։" },
+      data: {
+        userId: user.id,
+        text: "Ձեր մուտքի հայտը հաստատվել է տնoրենի կողմից։ Այժմ կարող եք մուտք գործել։",
+        organizationId: user.organizationId,
+      },
     });
   }
 
@@ -185,7 +227,12 @@ export class AuthService {
   }
 
   private async issueTokenPair(user: User): Promise<TokenPair> {
-    const payload: JwtPayload = { sub: user.id, role: user.role, employeeId: user.employeeId };
+    const payload: JwtPayload = {
+      sub: user.id,
+      role: user.role,
+      employeeId: user.employeeId,
+      organizationId: user.organizationId,
+    };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_ACCESS_SECRET ?? "change-me-access-secret-dev-only",
       expiresIn: process.env.JWT_ACCESS_TTL ?? "15m",
@@ -195,6 +242,7 @@ export class AuthService {
     await this.prisma.client.refreshToken.create({
       data: {
         userId: user.id,
+        organizationId: user.organizationId,
         tokenHash: hashToken(refreshToken),
         expiresAt: new Date(Date.now() + refreshTtlMs()),
       },

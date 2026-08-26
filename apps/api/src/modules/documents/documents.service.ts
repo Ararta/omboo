@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { DocumentUploadMetaInput } from "@omboo/shared";
+import { getOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { StorageService } from "../storage/storage.service";
 
@@ -29,14 +30,16 @@ export class DocumentsService {
   }
 
   async upload(meta: DocumentUploadMetaInput, file: Express.Multer.File, uploadedByUserId: string) {
+    const organizationId = getOrgId();
     const employee = await this.prisma.client.employee.findUnique({ where: { id: meta.employeeId } });
     if (!employee) throw new NotFoundException("Աշխատողը չի գտնվել։");
 
-    const key = `documents/${meta.employeeId}/${Date.now()}-${randomBytes(4).toString("hex")}-${file.originalname}`;
+    const key = `documents/${organizationId}/${meta.employeeId}/${Date.now()}-${randomBytes(4).toString("hex")}-${file.originalname}`;
     await this.storage.uploadObject(key, file.buffer, file.mimetype);
 
     return this.prisma.client.employeeDocument.create({
       data: {
+        organizationId,
         employeeId: meta.employeeId,
         title: meta.title,
         category: meta.category,

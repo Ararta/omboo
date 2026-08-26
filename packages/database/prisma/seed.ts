@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 // Mirrors reference/mrk_prototype_1.jsx `seedEmployees` + `DEFAULT_ORG` exactly, so the
 // production demo data matches the validated prototype. Demo login password for every
 // seeded user is "omboo1234" — local/demo only, never used in a real deployment.
+//
+// Multi-tenant: everything below is scoped to one demo Organization ("ararta"). Uniqueness
+// (email, order sequences) isn't yet enforced by a DB constraint scoped to organizationId —
+// that lands in the follow-up migration once this data is backfilled — so lookups here use
+// findFirst instead of Prisma's typed upsert-by-unique-key.
 
 const prisma = new PrismaClient();
 
@@ -12,21 +17,28 @@ const DEMO_PASSWORD = "omboo1234";
 async function main() {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
-  await prisma.orgSettings.upsert({
-    where: { id: 1 },
+  const org = await prisma.organization.upsert({
+    where: { slug: "ararta" },
     update: {},
-    create: {
-      id: 1,
-      companyName: "Օրինակ ընկերության անվանում",
-      address: "ք. Երևան, հասցե",
-      phone: "+374 XX XXX XXX",
-      email: "info@company.am",
-      directorName: "Ա. Առաքելյան",
-      directorSignatureKey: null,
-      hrName: "Ն. Ներսիսյան",
-      hrEmail: "hr@company.am",
-    },
+    create: { name: "Արարտա", slug: "ararta" },
   });
+
+  const existingOrgSettings = await prisma.orgSettings.findFirst({ where: { organizationId: org.id } });
+  if (!existingOrgSettings) {
+    await prisma.orgSettings.create({
+      data: {
+        organizationId: org.id,
+        companyName: "Օրինակ ընկերության անվանում",
+        address: "ք. Երևան, հասցե",
+        phone: "+374 XX XXX XXX",
+        email: "info@company.am",
+        directorName: "Ա. Առաքելյան",
+        directorSignatureKey: null,
+        hrName: "Ն. Ներսիսյան",
+        hrEmail: "hr@company.am",
+      },
+    });
+  }
 
   const employeesSeed = [
     {
@@ -74,61 +86,60 @@ async function main() {
   ] as const;
 
   for (const seed of employeesSeed) {
-    const employee = await prisma.employee.upsert({
-      where: { email: seed.email },
-      update: {},
-      create: {
-        name: seed.name,
-        position: seed.position,
-        email: seed.email,
-        hireDate: new Date(seed.hireDate),
-        minimumDays: seed.minimumDays,
-        extendedDays: seed.extendedDays,
-        additionalDays: seed.additionalDays,
-        annualTotal: seed.annualTotal,
-        balance: seed.balance,
-        dayOffBalance: seed.dayOffBalance,
-        lastVacationRequestDate: new Date(seed.lastVacationRequestDate),
-        lastReminderFired: null,
-        tenDayChunkConfirmed: false,
-        ...seed.priority,
-      },
-    });
+    let employee = await prisma.employee.findFirst({ where: { organizationId: org.id, email: seed.email } });
+    if (!employee) {
+      employee = await prisma.employee.create({
+        data: {
+          organizationId: org.id,
+          name: seed.name,
+          position: seed.position,
+          email: seed.email,
+          hireDate: new Date(seed.hireDate),
+          minimumDays: seed.minimumDays,
+          extendedDays: seed.extendedDays,
+          additionalDays: seed.additionalDays,
+          annualTotal: seed.annualTotal,
+          balance: seed.balance,
+          dayOffBalance: seed.dayOffBalance,
+          lastVacationRequestDate: new Date(seed.lastVacationRequestDate),
+          lastReminderFired: null,
+          tenDayChunkConfirmed: false,
+          ...seed.priority,
+        },
+      });
+    }
 
-    await prisma.user.upsert({
-      where: { email: seed.email },
-      update: {},
-      create: {
-        email: seed.email,
-        passwordHash,
-        role: Role.EMPLOYEE,
-        employeeId: employee.id,
-      },
-    });
+    const existingUser = await prisma.user.findUnique({ where: { email: seed.email } });
+    if (!existingUser) {
+      await prisma.user.create({
+        data: {
+          organizationId: org.id,
+          email: seed.email,
+          passwordHash,
+          role: Role.EMPLOYEE,
+          employeeId: employee.id,
+        },
+      });
+    }
   }
 
-  await prisma.user.upsert({
-    where: { email: "director@company.am" },
-    update: {},
-    create: { email: "director@company.am", passwordHash, role: Role.DIRECTOR },
-  });
+  for (const [email, role] of [
+    ["director@company.am", Role.DIRECTOR],
+    ["hr@company.am", Role.HR],
+  ] as const) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (!existing) {
+      await prisma.user.create({ data: { organizationId: org.id, email, passwordHash, role } });
+    }
+  }
 
-  await prisma.user.upsert({
-    where: { email: "hr@company.am" },
-    update: {},
-    create: { email: "hr@company.am", passwordHash, role: Role.HR },
-  });
-
-  await prisma.orderSequence.upsert({
-    where: { year_series: { year: new Date().getFullYear(), series: "PRIMARY" } },
-    update: {},
-    create: { year: new Date().getFullYear(), series: "PRIMARY", lastValue: 0 },
-  });
-  await prisma.orderSequence.upsert({
-    where: { year_series: { year: new Date().getFullYear(), series: "RECALL" } },
-    update: {},
-    create: { year: new Date().getFullYear(), series: "RECALL", lastValue: 0 },
-  });
+  for (const series of ["PRIMARY", "RECALL"] as const) {
+    const year = new Date().getFullYear();
+    const existing = await prisma.orderSequence.findFirst({ where: { organizationId: org.id, year, series } });
+    if (!existing) {
+      await prisma.orderSequence.create({ data: { organizationId: org.id, year, series, lastValue: 0 } });
+    }
+  }
 
   // eslint-disable-next-line no-console
   console.log(
