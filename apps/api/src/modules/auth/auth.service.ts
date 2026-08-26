@@ -75,7 +75,9 @@ export class AuthService {
     if (existingEmail) throw new ConflictException("Այս էլ. փոստով հաշիվ արդեն գոյություն ունի։");
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await this.prisma.client.$transaction(async (tx) => {
+    // Pre-auth — never runs inside the per-request transaction (no JWT/org context exists yet
+    // to open one), so this opens its own explicit transaction directly on the base client.
+    await this.prisma.extended.$transaction(async (tx) => {
       const org = await tx.organization.create({ data: { name: organizationName, slug: orgSlug } });
       await tx.user.create({
         data: {
@@ -101,8 +103,10 @@ export class AuthService {
     if (existing) throw new ConflictException("Այս էլ. փոստով հաշիվ արդեն գոյություն ունի։");
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Also pre-auth — this request has no org context from a JWT, so wrap explicitly and open
+    // its own transaction directly on the base client (see registerOrganization above).
     await runWithOrgId(org.id, () =>
-      this.prisma.client.$transaction(async (tx) => {
+      this.prisma.extended.$transaction(async (tx) => {
         await tx.user.create({
           data: { organizationId: org.id, name, email, passwordHash, role: "HR", pendingApproval: true },
         });

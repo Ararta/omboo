@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { getReminderInfo, notifications, shouldFireReminder, todayInYerevan } from "@omboo/shared";
-import { runWithOrgId } from "@omboo/database";
+import { runWithOrgId, runWithTx } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { toISODate } from "../requests/request-mappers";
@@ -37,22 +37,28 @@ export class RemindersService {
     if (fired > 0) this.logger.log(`164.10 reminder sweep: fired ${fired} reminder(s).`);
   }
 
+  // Opens its own transaction (this cron never runs inside TenantTransactionInterceptor — there's
+  // no HTTP request) and sets app.current_org_id itself, exactly like the interceptor does per
+  // request, so Layer 2 (Postgres RLS) sees a consistent tenant context for the whole sweep.
   private async sweepOrganization(organizationId: string, today: string): Promise<number> {
-    const employees = await this.prisma.client.employee.findMany({ where: { organizationId } });
-    let fired = 0;
+    return this.prisma.extended.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
+      return runWithTx(tx, async () => {
+        const employees = await this.prisma.client.employee.findMany({ where: { organizationId } });
+        let fired = 0;
 
-    for (const emp of employees) {
-      const last = emp.lastVacationRequestDate ? toISODate(emp.lastVacationRequestDate) : null;
-      const { daysRemaining } = getReminderInfo(last, toISODate(emp.hireDate), today);
-      if (!shouldFireReminder(daysRemaining, emp.lastReminderFired)) continue;
+        for (const emp of employees) {
+          const last = emp.lastVacationRequestDate ? toISODate(emp.lastVacationRequestDate) : null;
+          const { daysRemaining } = getReminderInfo(last, toISODate(emp.hireDate), today);
+          if (!shouldFireReminder(daysRemaining, emp.lastReminderFired)) continue;
 
-      await this.prisma.client.$transaction(async (tx) => {
-        await this.notificationsService.notifyRole(tx, "HR", notifications.reminderForHR(emp.name, daysRemaining));
-        await this.notificationsService.notifyEmployee(tx, emp.id, notifications.reminderForEmployee(daysRemaining));
-        await tx.employee.update({ where: { id: emp.id }, data: { lastReminderFired: daysRemaining } });
+          await this.notificationsService.notifyRole(tx, "HR", notifications.reminderForHR(emp.name, daysRemaining));
+          await this.notificationsService.notifyEmployee(tx, emp.id, notifications.reminderForEmployee(daysRemaining));
+          await tx.employee.update({ where: { id: emp.id }, data: { lastReminderFired: daysRemaining } });
+          fired++;
+        }
+        return fired;
       });
-      fired++;
-    }
-    return fired;
+    });
   }
 }

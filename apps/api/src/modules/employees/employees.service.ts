@@ -39,40 +39,41 @@ export class EmployeesService {
     const organizationId = getOrgId();
     let employee;
     try {
-      employee = await this.prisma.client.$transaction(async (tx) => {
-        const created = await tx.employee.create({
-          data: {
-            organizationId,
-            name: dto.name,
-            position: dto.position,
-            email: employeeEmail,
-            hireDate: new Date(dto.hireDate),
-            minimumDays: dto.minimumDays,
-            extendedDays: dto.extendedDays,
-            additionalDays: dto.additionalDays,
-            annualTotal,
-            balance: annualTotal,
-            dayOffBalance: 5,
-            lastVacationRequestDate: new Date(dto.hireDate),
-          },
-        });
-        if (email && passwordHash) {
-          await tx.user.create({
-            data: { organizationId, email, passwordHash, role: "EMPLOYEE", employeeId: created.id },
-          });
-        }
-        await tx.balanceAdjustmentLog.create({
-          data: {
-            organizationId,
-            employeeId: created.id,
-            field: "balance",
-            previousValue: 0,
-            nextValue: annualTotal,
-            changedByUserId: "system",
-          },
-        });
-        return created;
+      // No nested $transaction — this route already runs inside the per-request transaction
+      // (see TenantTransactionInterceptor), so these three writes are already atomic together.
+      const tx = this.prisma.client;
+      const created = await tx.employee.create({
+        data: {
+          organizationId,
+          name: dto.name,
+          position: dto.position,
+          email: employeeEmail,
+          hireDate: new Date(dto.hireDate),
+          minimumDays: dto.minimumDays,
+          extendedDays: dto.extendedDays,
+          additionalDays: dto.additionalDays,
+          annualTotal,
+          balance: annualTotal,
+          dayOffBalance: 5,
+          lastVacationRequestDate: new Date(dto.hireDate),
+        },
       });
+      if (email && passwordHash) {
+        await tx.user.create({
+          data: { organizationId, email, passwordHash, role: "EMPLOYEE", employeeId: created.id },
+        });
+      }
+      await tx.balanceAdjustmentLog.create({
+        data: {
+          organizationId,
+          employeeId: created.id,
+          field: "balance",
+          previousValue: 0,
+          nextValue: annualTotal,
+          changedByUserId: "system",
+        },
+      });
+      employee = created;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
         const owner = await this.prisma.client.employee.findFirst({ where: { email }, select: { name: true, position: true } });
@@ -144,13 +145,12 @@ export class EmployeesService {
   async adjustBalance(id: string, nextBalance: number, changedByUserId: string) {
     const employee = await this.findByIdOrThrow(id);
     const previous = employee.balance;
-    await this.prisma.client.$transaction(async (tx) => {
-      await tx.employee.update({ where: { id }, data: { balance: nextBalance } });
-      await tx.balanceAdjustmentLog.create({
-        data: { organizationId: getOrgId(), employeeId: id, field: "balance", previousValue: previous, nextValue: nextBalance, changedByUserId },
-      });
-      await this.notificationsService.notifyEmployee(tx, id, notifications.balanceManuallyAdjusted(nextBalance));
+    const tx = this.prisma.client;
+    await tx.employee.update({ where: { id }, data: { balance: nextBalance } });
+    await tx.balanceAdjustmentLog.create({
+      data: { organizationId: getOrgId(), employeeId: id, field: "balance", previousValue: previous, nextValue: nextBalance, changedByUserId },
     });
+    await this.notificationsService.notifyEmployee(tx, id, notifications.balanceManuallyAdjusted(nextBalance));
     return this.findByIdOrThrow(id);
   }
 }

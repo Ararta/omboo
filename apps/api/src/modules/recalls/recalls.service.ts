@@ -61,34 +61,33 @@ export class RecallsService {
     }
 
     const organizationId = getOrgId();
-    return this.prisma.client.$transaction(async (tx) => {
-      await tx.recall.create({
-        data: {
-          organizationId,
-          requestId,
-          requestedEnd: new Date(dto.requestedEnd),
-          reason: dto.reason,
-          status: "PENDING_EMPLOYEE",
-        },
-      });
-      await tx.requestHistory.create({
-        data: {
-          organizationId,
-          requestId,
-          step: historySteps.recallRequested,
-          actorUserId: null,
-          actorDisplayName: HR_ACTOR,
-          note: dto.reason,
-        },
-      });
-      await this.notificationsService.notifyEmployee(
-        tx,
-        request.employeeId,
-        notifications.recallRequestedForEmployee(fmtDateHY(dto.requestedEnd)),
+    const tx = this.prisma.client;
+    await tx.recall.create({
+      data: {
+        organizationId,
         requestId,
-      );
-      return tx.recall.findUnique({ where: { requestId } });
+        requestedEnd: new Date(dto.requestedEnd),
+        reason: dto.reason,
+        status: "PENDING_EMPLOYEE",
+      },
     });
+    await tx.requestHistory.create({
+      data: {
+        organizationId,
+        requestId,
+        step: historySteps.recallRequested,
+        actorUserId: null,
+        actorDisplayName: HR_ACTOR,
+        note: dto.reason,
+      },
+    });
+    await this.notificationsService.notifyEmployee(
+      tx,
+      request.employeeId,
+      notifications.recallRequestedForEmployee(fmtDateHY(dto.requestedEnd)),
+      requestId,
+    );
+    return tx.recall.findUnique({ where: { requestId } });
   }
 
   async respond(employeeId: string, requestId: string, accept: boolean) {
@@ -104,17 +103,16 @@ export class RecallsService {
     const status = accept ? "ACCEPTED" : "DECLINED";
     const step = accept ? historySteps.recallAccepted : historySteps.recallDeclined;
 
-    return this.prisma.client.$transaction(async (tx) => {
-      await tx.recall.update({ where: { requestId }, data: { status } });
-      await tx.requestHistory.create({
-        data: { organizationId: getOrgId(), requestId, step, actorUserId: null, actorDisplayName: request.employee.name },
-      });
-      const text = accept
-        ? notifications.recallAcceptedForHR(request.employee.name)
-        : notifications.recallDeclinedForHR(request.employee.name);
-      await this.notificationsService.notifyRole(tx, "HR", text, requestId);
-      return tx.recall.findUnique({ where: { requestId } });
+    const tx = this.prisma.client;
+    await tx.recall.update({ where: { requestId }, data: { status } });
+    await tx.requestHistory.create({
+      data: { organizationId: getOrgId(), requestId, step, actorUserId: null, actorDisplayName: request.employee.name },
     });
+    const text = accept
+      ? notifications.recallAcceptedForHR(request.employee.name)
+      : notifications.recallDeclinedForHR(request.employee.name);
+    await this.notificationsService.notifyRole(tx, "HR", text, requestId);
+    return tx.recall.findUnique({ where: { requestId } });
   }
 
   async finalize(requestId: string) {
@@ -134,36 +132,35 @@ export class RecallsService {
     const requestedEndDate = request.recall.requestedEnd;
     const organizationId = getOrgId();
 
-    return this.prisma.client.$transaction(async (tx) => {
-      const seq = await tx.orderSequence.upsert({
-        where: { organizationId_year_series: { organizationId, year, series: "RECALL" } },
-        update: { lastValue: { increment: 1 } },
-        create: { organizationId, year, series: "RECALL", lastValue: 1 },
-      });
-      const orderNumber = formatOrderNumber(year, "RECALL", seq.lastValue);
-
-      await tx.request.update({ where: { id: requestId }, data: { end: requestedEndDate, days: newDays } });
-      await tx.recall.update({ where: { requestId }, data: { status: "FINALIZED", orderNumber } });
-      await tx.requestHistory.create({
-        data: {
-          organizationId,
-          requestId,
-          step: historySteps.recallOrderCreated(orderNumber),
-          actorUserId: null,
-          actorDisplayName: HR_ACTOR,
-        },
-      });
-
-      if (delta > 0) {
-        if (request.type === "VACATION") {
-          await tx.employee.update({ where: { id: request.employeeId }, data: { balance: { increment: delta } } });
-        } else if (request.type === "DAYOFF") {
-          await tx.employee.update({ where: { id: request.employeeId }, data: { dayOffBalance: { increment: delta } } });
-        }
-      }
-
-      await this.notificationsService.notifyEmployee(tx, request.employeeId, notifications.recallFinalizedForEmployee(delta), requestId);
-      return tx.request.findUnique({ where: { id: requestId }, include: { recall: true } });
+    const tx = this.prisma.client;
+    const seq = await tx.orderSequence.upsert({
+      where: { organizationId_year_series: { organizationId, year, series: "RECALL" } },
+      update: { lastValue: { increment: 1 } },
+      create: { organizationId, year, series: "RECALL", lastValue: 1 },
     });
+    const orderNumber = formatOrderNumber(year, "RECALL", seq.lastValue);
+
+    await tx.request.update({ where: { id: requestId }, data: { end: requestedEndDate, days: newDays } });
+    await tx.recall.update({ where: { requestId }, data: { status: "FINALIZED", orderNumber } });
+    await tx.requestHistory.create({
+      data: {
+        organizationId,
+        requestId,
+        step: historySteps.recallOrderCreated(orderNumber),
+        actorUserId: null,
+        actorDisplayName: HR_ACTOR,
+      },
+    });
+
+    if (delta > 0) {
+      if (request.type === "VACATION") {
+        await tx.employee.update({ where: { id: request.employeeId }, data: { balance: { increment: delta } } });
+      } else if (request.type === "DAYOFF") {
+        await tx.employee.update({ where: { id: request.employeeId }, data: { dayOffBalance: { increment: delta } } });
+      }
+    }
+
+    await this.notificationsService.notifyEmployee(tx, request.employeeId, notifications.recallFinalizedForEmployee(delta), requestId);
+    return tx.request.findUnique({ where: { id: requestId }, include: { recall: true } });
   }
 }

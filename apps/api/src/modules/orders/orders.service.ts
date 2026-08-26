@@ -66,33 +66,31 @@ export class OrdersService {
     const year = new Date().getFullYear();
     const organizationId = getOrgId();
 
-    const { orderNumber } = await this.prisma.client.$transaction(async (tx) => {
-      const seq = await tx.orderSequence.upsert({
-        where: { organizationId_year_series: { organizationId, year, series: "PRIMARY" } },
-        update: { lastValue: { increment: 1 } },
-        create: { organizationId, year, series: "PRIMARY", lastValue: 1 },
-      });
-      const orderNumber = formatOrderNumber(year, "PRIMARY", seq.lastValue);
-      await tx.request.update({ where: { id: requestId }, data: { status: "ORDER_CREATED", orderNumber } });
-      await tx.requestHistory.create({
-        data: {
-          organizationId,
-          requestId,
-          step: historySteps.orderCreated(orderNumber),
-          actorUserId: null,
-          actorDisplayName: HR_ACTOR,
-        },
-      });
-      await tx.requestHistory.create({
-        data: {
-          organizationId,
-          requestId,
-          step: historySteps.orderSigned(orderNumber, org.directorName),
-          actorUserId: null,
-          actorDisplayName: HR_ACTOR,
-        },
-      });
-      return { orderNumber };
+    const tx = this.prisma.client;
+    const seq = await tx.orderSequence.upsert({
+      where: { organizationId_year_series: { organizationId, year, series: "PRIMARY" } },
+      update: { lastValue: { increment: 1 } },
+      create: { organizationId, year, series: "PRIMARY", lastValue: 1 },
+    });
+    const orderNumber = formatOrderNumber(year, "PRIMARY", seq.lastValue);
+    await tx.request.update({ where: { id: requestId }, data: { status: "ORDER_CREATED", orderNumber } });
+    await tx.requestHistory.create({
+      data: {
+        organizationId,
+        requestId,
+        step: historySteps.orderCreated(orderNumber),
+        actorUserId: null,
+        actorDisplayName: HR_ACTOR,
+      },
+    });
+    await tx.requestHistory.create({
+      data: {
+        organizationId,
+        requestId,
+        step: historySteps.orderSigned(orderNumber, org.directorName),
+        actorUserId: null,
+        actorDisplayName: HR_ACTOR,
+      },
     });
 
     const directorSignatureUrl = org.directorSignatureKey ? await this.toDataUri(org.directorSignatureKey) : null;
@@ -115,10 +113,8 @@ export class OrdersService {
       await this.emailService.sendPdf(org.hrEmail, `Հրաման ${orderNumber}`, hrText, pdf, `${orderNumber}.pdf`);
     }
 
-    await this.prisma.client.$transaction(async (tx) => {
-      await this.notificationsService.notifyEmployee(tx, request.employeeId, employeeText, requestId);
-      await this.notificationsService.notifyRole(tx, "HR", hrText, requestId);
-    });
+    await this.notificationsService.notifyEmployee(tx, request.employeeId, employeeText, requestId);
+    await this.notificationsService.notifyRole(tx, "HR", hrText, requestId);
 
     return { orderNumber, pdfBase64: pdf.toString("base64") };
   }
