@@ -124,15 +124,52 @@ model Employee {
   priorityCaregiver        Boolean @default(false)
   priorityViolenceVictim   Boolean @default(false)
 
+  // Org chart — nullable self-relation. A cycle (A manages B manages A) is prevented at the
+  // service layer, not the DB, since Postgres has no native "no cycles" constraint.
+  managerId String?
+  manager   Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
+  reports   Employee[] @relation("EmployeeManager")
+
   user               User?
   requests           Request[]
   balanceAdjustments BalanceAdjustmentLog[]
   attendanceLogs     AttendanceLog[]
+  documents          EmployeeDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("employees")
+}
+
+enum DocumentCategory {
+  CONTRACT
+  ORDER
+  CERTIFICATE
+  ID_DOCUMENT
+  OTHER
+}
+
+// HR document library — one row per uploaded file, always scoped to one employee (company-wide
+// documents aren't in scope yet). The file itself lives in S3/MinIO; this row is metadata only.
+model EmployeeDocument {
+  id         String @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  title    String
+  category DocumentCategory
+  fileKey  String // S3 object key, not base64
+  fileName String
+  mimeType String
+  fileSize Int
+
+  uploadedByUserId String
+
+  createdAt DateTime @default(now())
+
+  @@index([employeeId])
+  @@map("employee_documents")
 }
 
 // GPS-based clock-in/out. Location is captured only at the two discrete tap moments the

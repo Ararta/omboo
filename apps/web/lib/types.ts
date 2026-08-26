@@ -1,4 +1,4 @@
-import type { RecallStatus, RequestStatus, RequestType } from "@omboo/shared";
+import type { DocumentCategory, RecallStatus, RequestStatus, RequestType } from "@omboo/shared";
 
 export interface EmployeeView {
   id: string;
@@ -20,6 +20,7 @@ export interface EmployeeView {
   priorityTeacher: boolean;
   priorityCaregiver: boolean;
   priorityViolenceVictim: boolean;
+  managerId: string | null;
 }
 
 export interface RecallView {
@@ -106,4 +107,17 @@ export interface PendingUserView {
   email: string;
   role: string;
   createdAt: string;
+}
+
+export interface DocumentView {
+  id: string;
+  employeeId: string;
+  title: string;
+  category: DocumentCategory;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedByUserId: string;
+  createdAt: string;
+  employee?: { id: string; name: string; position: string };
 }

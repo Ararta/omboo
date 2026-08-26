@@ -11,3 +11,4 @@ export * from "./schemas/employee.schema.js";
 export * from "./schemas/org-settings.schema.js";
 export * from "./schemas/auth.schema.js";
 export * from "./schemas/attendance.schema.js";
+export * from "./schemas/document.schema.js";

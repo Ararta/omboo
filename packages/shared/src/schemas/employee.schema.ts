@@ -36,5 +36,6 @@ export const updateEmployeeSchema = z.object({
   priorityTeacher: z.boolean().optional(),
   priorityCaregiver: z.boolean().optional(),
   priorityViolenceVictim: z.boolean().optional(),
+  managerId: z.string().nullable().optional(),
 });
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;

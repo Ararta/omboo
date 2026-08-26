@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import * as bcrypt from "bcryptjs";
 import { Prisma } from "@omboo/database";
@@ -92,6 +92,11 @@ export class EmployeesService {
     const additionalDays = dto.additionalDays ?? existing.additionalDays;
     const annualTotal = minimumDays + extendedDays + additionalDays;
 
+    if (dto.managerId !== undefined && dto.managerId !== null) {
+      if (dto.managerId === id) throw new BadRequestException("Աշխատողը չի կարող ինքն իր ղեկավարը լինել։");
+      await this.assertNoManagerCycle(id, dto.managerId);
+    }
+
     return this.prisma.client.employee.update({
       where: { id },
       data: {
@@ -106,12 +111,31 @@ export class EmployeesService {
         priorityTeacher: dto.priorityTeacher,
         priorityCaregiver: dto.priorityCaregiver,
         priorityViolenceVictim: dto.priorityViolenceVictim,
+        managerId: dto.managerId,
         minimumDays,
         extendedDays,
         additionalDays,
         annualTotal,
       },
     });
+  }
+
+  /** Walks up from `newManagerId` through the manager chain — if `employeeId` appears, setting
+   * this manager would create a cycle (eg. A -> B -> A). Postgres has no native way to forbid
+   * this on a self-referencing FK, so it's enforced here. */
+  private async assertNoManagerCycle(employeeId: string, newManagerId: string): Promise<void> {
+    let cursor: string | null = newManagerId;
+    const seen = new Set<string>();
+    while (cursor) {
+      if (cursor === employeeId) throw new BadRequestException("Այս նշանակումը կստեղծի ղեկավարման ցիկլ։");
+      if (seen.has(cursor)) break; // pre-existing cycle elsewhere; don't loop forever
+      seen.add(cursor);
+      const manager: { managerId: string | null } | null = await this.prisma.client.employee.findUnique({
+        where: { id: cursor },
+        select: { managerId: true },
+      });
+      cursor = manager?.managerId ?? null;
+    }
   }
 
   async adjustBalance(id: string, nextBalance: number, changedByUserId: string) {
