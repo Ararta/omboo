@@ -9,6 +9,7 @@ import { Card } from "../../components/ui/Card";
 import { Seal } from "../../components/ui/Seal";
 import { StatusPill } from "../../components/ui/StatusPill";
 import { Button } from "../../components/ui/Button";
+import { AttendanceCard } from "../../components/AttendanceCard";
 import { colors } from "../../lib/theme";
 
 export default function EmployeeHome() {
@@ -67,6 +68,8 @@ export default function EmployeeHome() {
 
   return (
     <ScrollView style={styles.screen} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      <AttendanceCard />
+
       <View style={styles.row}>
         <Card style={{ flex: 1, marginRight: 8, alignItems: "center" }}>
           <Text style={styles.mutedSmall}>Արձակուրդ</Text>

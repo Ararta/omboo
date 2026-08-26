@@ -22,6 +22,11 @@ export interface EmployeeView {
   priorityViolenceVictim: boolean;
 }
 
+export interface AttendanceStatusView {
+  checkedIn: boolean;
+  since: string | null;
+}
+
 export interface RecallView {
   id: string;
   requestedEnd: string;

@@ -127,11 +127,45 @@ model Employee {
   user               User?
   requests           Request[]
   balanceAdjustments BalanceAdjustmentLog[]
+  attendanceLogs     AttendanceLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("employees")
+}
+
+// GPS-based clock-in/out. Location is captured only at the two discrete tap moments the
+// employee initiates — never polled or tracked in the background — so there is no location
+// data outside working hours by construction. Raw coordinates are readable only by the owning
+// employee and HR (see attendance.controller.ts guards); never surfaced to DIRECTOR or in any
+// exported/emailed document.
+model AttendanceLog {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  checkInAt             DateTime
+  // Null only for entries HR created/corrected by hand (no real device GPS reading).
+  checkInLat            Float?
+  checkInLng            Float?
+  checkInWithinGeofence Boolean?
+
+  checkOutAt             DateTime?
+  checkOutLat            Float?
+  checkOutLng            Float?
+  checkOutWithinGeofence Boolean?
+
+  // Set when HR manually creates or corrects an entry (e.g. a missed clock-out).
+  editedByUserId String?
+  editedAt       DateTime?
+  note           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, checkInAt])
+  @@map("attendance_logs")
 }
 
 model Request {
@@ -201,6 +235,13 @@ model OrgSettings {
   directorSignatureKey String? // S3 object key, not base64
   hrName               String
   hrEmail              String
+
+  // Attendance geofence — check-in/out is validated against this point. Null until HR sets it
+  // (via the "Օգտագործել կազմակերպության հասցեն" flow or manual entry), in which case the
+  // mobile app allows check-in from anywhere and just flags it as outside-geofence.
+  officeLat            Float?
+  officeLng            Float?
+  geofenceRadiusMeters Int    @default(150)
 
   updatedAt DateTime @updatedAt
 

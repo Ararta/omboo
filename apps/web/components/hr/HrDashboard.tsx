@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Users, Clock, FileSignature, RotateCcw, ScrollText } from "lucide-react";
+import { Building2, Users, Clock, FileSignature, RotateCcw, ScrollText, MapPin } from "lucide-react";
 import { api } from "../../lib/api-client";
 import type { OrgSettingsView } from "../../lib/types";
 import { OrgSettingsSection } from "./OrgSettingsSection";
@@ -10,6 +10,7 @@ import { ReminderSection } from "./ReminderSection";
 import { OrdersSection } from "./OrdersSection";
 import { RecallsSection } from "./RecallsSection";
 import { AuditSection } from "./AuditSection";
+import { AttendanceSection } from "./AttendanceSection";
 
 export function HrDashboard() {
   // Starts unknown so the "fill in" badge doesn't flash on an already-configured org just
@@ -24,6 +25,7 @@ export function HrDashboard() {
   const NAV_SECTIONS = [
     { id: "org", label: "Կազմակերպության տվյալներ", icon: Building2, render: () => <OrgSettingsSection onConfiguredChange={setOrgConfigured} /> },
     { id: "employees", label: "Աշխատողների կառավարում", icon: Users, render: () => <EmployeesSection /> },
+    { id: "attendance", label: "Ներկայության տեղեկագիր", icon: MapPin, render: () => <AttendanceSection /> },
     { id: "reminders", label: "2,5-ամյա ժամկետ", icon: Clock, render: () => <ReminderSection /> },
     { id: "orders", label: "Հրամանի կազմում", icon: FileSignature, render: () => <OrdersSection /> },
     { id: "recalls", label: "Հետկանչում", icon: RotateCcw, render: () => <RecallsSection /> },

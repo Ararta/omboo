@@ -12,6 +12,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
 import { OrgSettingsModule } from "./modules/org-settings/org-settings.module";
 import { StorageModule } from "./modules/storage/storage.module";
 import { EmailModule } from "./modules/email/email.module";
+import { AttendanceModule } from "./modules/attendance/attendance.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { EmailModule } from "./modules/email/email.module";
     OrgSettingsModule,
     StorageModule,
     EmailModule,
+    AttendanceModule,
   ],
 })
 export class AppModule {}

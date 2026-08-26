@@ -63,6 +63,34 @@ export interface OrgSettingsView {
   directorSignatureUrl: string | null;
   hrName: string;
   hrEmail: string;
+  officeLat: number | null;
+  officeLng: number | null;
+  geofenceRadiusMeters: number;
+}
+
+export interface AttendanceLogView {
+  id: string;
+  employeeId: string;
+  checkInAt: string;
+  checkInLat: number | null;
+  checkInLng: number | null;
+  checkInWithinGeofence: boolean | null;
+  checkOutAt: string | null;
+  checkOutLat: number | null;
+  checkOutLng: number | null;
+  checkOutWithinGeofence: boolean | null;
+  editedByUserId: string | null;
+  editedAt: string | null;
+  note: string | null;
+  employee: { id: string; name: string; position: string };
+}
+
+export interface AttendanceReportRowView {
+  employeeId: string;
+  name: string;
+  position: string;
+  totalHours: number;
+  entryCount: number;
 }
 
 export interface NotificationView {

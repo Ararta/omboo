@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { OrgSettings } from "@omboo/database";
-import type { OrgSettingsInput } from "@omboo/shared";
+import type { GeofenceSettingsInput, OrgSettingsInput } from "@omboo/shared";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { StorageService } from "../storage/storage.service";
 
@@ -25,6 +25,11 @@ export class OrgSettingsService {
   }
 
   async update(dto: OrgSettingsInput) {
+    const updated = await this.prisma.client.orgSettings.update({ where: { id: 1 }, data: dto });
+    return this.withSignatureUrl(updated);
+  }
+
+  async updateGeofence(dto: GeofenceSettingsInput) {
     const updated = await this.prisma.client.orgSettings.update({ where: { id: 1 }, data: dto });
     return this.withSignatureUrl(updated);
   }

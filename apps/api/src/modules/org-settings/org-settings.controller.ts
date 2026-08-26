@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
-import { orgSettingsSchema, type OrgSettingsInput } from "@omboo/shared";
+import { geofenceSettingsSchema, orgSettingsSchema, type GeofenceSettingsInput, type OrgSettingsInput } from "@omboo/shared";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -22,6 +22,12 @@ export class OrgSettingsController {
   @Roles("HR")
   update(@Body(new ZodValidationPipe(orgSettingsSchema)) dto: OrgSettingsInput) {
     return this.orgSettings.update(dto);
+  }
+
+  @Patch("geofence")
+  @Roles("HR")
+  updateGeofence(@Body(new ZodValidationPipe(geofenceSettingsSchema)) dto: GeofenceSettingsInput) {
+    return this.orgSettings.updateGeofence(dto);
   }
 
   @Post("signature")
