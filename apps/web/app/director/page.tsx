@@ -8,6 +8,7 @@ import type { RequestView } from "../../lib/types";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { TeamOutCard } from "../../components/TeamOutCard";
+import { AccessRequestsCard } from "../../components/AccessRequestsCard";
 
 export default function DirectorPage() {
   const [pending, setPending] = useState<RequestView[]>([]);
@@ -39,6 +40,7 @@ export default function DirectorPage() {
 
   return (
     <div>
+      <AccessRequestsCard />
       <TeamOutCard requests={teamOut} />
 
       <div className="mb-2.5 font-serif text-[17px] text-ink">Հաստատման սպասող հայտ-դիմումներ ({pending.length})</div>

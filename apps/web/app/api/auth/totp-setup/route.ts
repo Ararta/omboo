@@ -4,7 +4,7 @@ import { setSessionCookies } from "../../../../lib/session";
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const upstream = await fetch(backendUrl("/auth/login"), {
+  const upstream = await fetch(backendUrl("/auth/totp/setup-confirm"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -14,12 +14,6 @@ export async function POST(req: Request) {
 
   if (!upstream.ok) {
     return NextResponse.json(data, { status: upstream.status });
-  }
-
-  // Backend ("HR"/"DIRECTOR") logins go through TOTP first — no tokens yet in that case,
-  // just pass the setup/challenge info through for the login page to continue the flow.
-  if (data.totpSetupRequired || data.requiresTotp) {
-    return NextResponse.json(data);
   }
 
   const response = NextResponse.json({ user: data.user });

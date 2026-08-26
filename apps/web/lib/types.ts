@@ -71,3 +71,11 @@ export interface NotificationView {
   read: boolean;
   createdAt: string;
 }
+
+export interface PendingUserView {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+  createdAt: string;
+}

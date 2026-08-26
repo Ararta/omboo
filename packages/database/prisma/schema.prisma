@@ -50,10 +50,22 @@ enum OrderSeries {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  passwordHash  String
-  role          Role
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String
+  role         Role
+  // Only set for self-registered backend (HR) accounts that have no linked Employee row.
+  name         String?
+
+  // Self-registered HR accounts start pending until a DIRECTOR approves them; seeded/
+  // employees.service.ts-created accounts default to false (already trusted).
+  pendingApproval Boolean @default(false)
+
+  // TOTP two-factor, required for HR/DIRECTOR ("backend") logins once enabled. The secret is
+  // written as soon as setup starts but totpEnabled only flips true after a confirmed code.
+  totpSecret  String?
+  totpEnabled Boolean @default(false)
+
   employee      Employee?      @relation(fields: [employeeId], references: [id])
   employeeId    String?        @unique
   refreshTokens RefreshToken[]

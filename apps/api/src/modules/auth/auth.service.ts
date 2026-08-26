@@ -1,8 +1,11 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
+import { authenticator } from "otplib";
+import * as QRCode from "qrcode";
 import type { User } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { generateRefreshToken, hashToken, refreshTtlMs } from "./token.util";
 import type { JwtPayload } from "./jwt.strategy";
 
@@ -19,15 +22,33 @@ export interface TokenPair {
   user: PublicUser;
 }
 
+/** "Backend" roles that must go through TOTP two-factor before a session is issued. */
+const TWO_FACTOR_ROLES: User["role"][] = ["HR", "DIRECTOR"];
+
+// Ephemeral setup/challenge tokens are signed with a distinct secret so they can never be
+// mistaken for a real access token by JwtStrategy (which only trusts JWT_ACCESS_SECRET).
+const EPHEMERAL_SECRET = `${process.env.JWT_ACCESS_SECRET ?? "change-me-access-secret-dev-only"}:ephemeral`;
+
+interface EphemeralPayload {
+  sub: string;
+  purpose: "totp-setup" | "totp-challenge";
+}
+
 function toPublicUser(user: User): PublicUser {
   return { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId };
 }
+
+export type LoginResult =
+  | TokenPair
+  | { totpSetupRequired: true; setupToken: string; qrCodeDataUrl: string; secret: string }
+  | { requiresTotp: true; challengeToken: string };
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -37,10 +58,108 @@ export class AuthService {
     return valid ? user : null;
   }
 
-  async login(email: string, password: string): Promise<TokenPair> {
+  /** Self-registration for backend (HR) access — always creates a pending, unapproved HR
+   * account and notifies every DIRECTOR to review it. Never issues tokens directly. */
+  async register(name: string, email: string, password: string): Promise<void> {
+    const existing = await this.prisma.client.user.findUnique({ where: { email } });
+    if (existing) throw new ConflictException("Այս էլ. փոստով հաշիվ արդեն գոյություն ունի։");
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.user.create({
+        data: { name, email, passwordHash, role: "HR", pendingApproval: true },
+      });
+      await this.notificationsService.notifyRole(
+        tx,
+        "DIRECTOR",
+        `${name} (${email}) մուտքի հայտ է ուղարկել ՄՌԿ մասնագետի իրավունքների համար. սպասում է հաստատման։`,
+      );
+    });
+  }
+
+  async login(email: string, password: string): Promise<LoginResult> {
     const user = await this.validateUser(email, password);
     if (!user) throw new UnauthorizedException("Սխալ էլ. փոստ կամ գաղտնաբառ։");
+    if (user.pendingApproval) {
+      throw new ForbiddenException("Ձեր հաշիվը դեռ սպասում է տնoրենի հաստատմանը։");
+    }
+
+    if (TWO_FACTOR_ROLES.includes(user.role)) {
+      if (!user.totpEnabled) return this.beginTotpSetup(user);
+      return {
+        requiresTotp: true,
+        challengeToken: this.signEphemeral({ sub: user.id, purpose: "totp-challenge" }),
+      };
+    }
+
     return this.issueTokenPair(user);
+  }
+
+  private async beginTotpSetup(user: User) {
+    const secret = authenticator.generateSecret();
+    await this.prisma.client.user.update({ where: { id: user.id }, data: { totpSecret: secret } });
+    const otpauthUrl = authenticator.keyuri(user.email, "Omboo", secret);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+    return {
+      totpSetupRequired: true as const,
+      setupToken: this.signEphemeral({ sub: user.id, purpose: "totp-setup" }),
+      qrCodeDataUrl,
+      secret,
+    };
+  }
+
+  async confirmTotpSetup(setupToken: string, code: string): Promise<TokenPair> {
+    const user = await this.loadFromEphemeral(setupToken, "totp-setup");
+    if (!user.totpSecret || !authenticator.verify({ token: code, secret: user.totpSecret })) {
+      throw new UnauthorizedException("Սխալ հաստատման կոդ։");
+    }
+    const updated = await this.prisma.client.user.update({ where: { id: user.id }, data: { totpEnabled: true } });
+    return this.issueTokenPair(updated);
+  }
+
+  async verifyTotp(challengeToken: string, code: string): Promise<TokenPair> {
+    const user = await this.loadFromEphemeral(challengeToken, "totp-challenge");
+    if (!user.totpSecret || !authenticator.verify({ token: code, secret: user.totpSecret })) {
+      throw new UnauthorizedException("Սխալ հաստատման կոդ։");
+    }
+    return this.issueTokenPair(user);
+  }
+
+  /** Pending self-registered HR accounts awaiting DIRECTOR review. */
+  listPendingUsers() {
+    return this.prisma.client.user.findMany({
+      where: { pendingApproval: true },
+      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
+  async approvePendingUser(id: string): Promise<void> {
+    const user = await this.prisma.client.user.update({ where: { id }, data: { pendingApproval: false } });
+    await this.prisma.client.notification.create({
+      data: { userId: user.id, text: "Ձեր մուտքի հայտը հաստատվել է տնoրենի կողմից։ Այժմ կարող եք մուտք գործել։" },
+    });
+  }
+
+  async rejectPendingUser(id: string): Promise<void> {
+    await this.prisma.client.user.deleteMany({ where: { id, pendingApproval: true } });
+  }
+
+  private signEphemeral(payload: EphemeralPayload): string {
+    return this.jwtService.sign(payload, { secret: EPHEMERAL_SECRET, expiresIn: "10m" });
+  }
+
+  private async loadFromEphemeral(token: string, purpose: EphemeralPayload["purpose"]): Promise<User> {
+    let payload: EphemeralPayload;
+    try {
+      payload = this.jwtService.verify<EphemeralPayload>(token, { secret: EPHEMERAL_SECRET });
+    } catch {
+      throw new UnauthorizedException("Հաստատման ժամկետը լրացել է, մուտք գործեք կրկին։");
+    }
+    if (payload.purpose !== purpose) throw new UnauthorizedException("Անվավեր token։");
+    const user = await this.prisma.client.user.findUnique({ where: { id: payload.sub } });
+    if (!user) throw new UnauthorizedException("Օգտատերը չի գտնվել։");
+    return user;
   }
 
   async refresh(rawToken: string): Promise<TokenPair> {
