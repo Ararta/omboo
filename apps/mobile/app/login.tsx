@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "700", color: colors.ink, marginBottom: 20 },
   label: { fontSize: 11.5, color: colors.muted, marginBottom: 4, marginTop: 10 },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14 },
-  error: { color: "#A02E2E", fontSize: 12.5, marginTop: 10 },
+  error: { color: "#841320", fontSize: 12.5, marginTop: 10 },
   button: { marginTop: 16, backgroundColor: colors.ink, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   hint: { marginTop: 16, fontSize: 11, color: colors.muted, lineHeight: 16 },

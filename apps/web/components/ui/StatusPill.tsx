@@ -1,11 +1,11 @@
 import type { RequestStatus } from "@omboo/shared";
 
 const STATUS_MAP: Record<RequestStatus, { text: string; bg: string; fg: string }> = {
-  SUBMITTED: { text: "Ուղարկված է", bg: "#EEF0F5", fg: "#1B2A4A" },
-  APPROVED: { text: "Հաստատված է", bg: "#E7F3EA", fg: "#1E6B3A" },
-  REJECTED: { text: "Մերժված է", bg: "#FBEAEA", fg: "#A02E2E" },
-  CANCELLED: { text: "Հետ կանչված է", bg: "#FBEAEA", fg: "#A02E2E" },
-  ORDER_CREATED: { text: "Հրամանը կազմված է", bg: "#EFE7F7", fg: "#6B3FA0" },
+  SUBMITTED: { text: "Ուղարկված է", bg: "#F3EAE6", fg: "#241619" },
+  APPROVED: { text: "Հաստատված է", bg: "#E6F4EC", fg: "#1F7A4D" },
+  REJECTED: { text: "Մերժված է", bg: "#F5E1E0", fg: "#841320" },
+  CANCELLED: { text: "Հետ կանչված է", bg: "#F5E1E0", fg: "#841320" },
+  ORDER_CREATED: { text: "Հրամանը կազմված է", bg: "#F7EED0", fg: "#A9860F" },
 };
 
 export const STATUS_LABELS: Record<RequestStatus, string> = Object.fromEntries(

@@ -71,7 +71,7 @@ export default function DirectorPage() {
                 )}
                 {r.reason && <div className="mt-0.5 text-[13px] italic text-muted">«{r.reason}»</div>}
                 {exceedsBalance && (
-                  <div className="mt-1.5 flex items-center gap-1 text-[12.5px] text-[#A02E2E]">
+                  <div className="mt-1.5 flex items-center gap-1 text-[12.5px] text-[#841320]">
                     <AlertCircle size={13} />
                     Հայտվող oրերը գերազանցում են մնացորդը
                   </div>

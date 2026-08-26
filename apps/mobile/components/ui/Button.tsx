@@ -6,7 +6,7 @@ type Variant = "primary" | "ghost" | "danger" | "seal";
 const VARIANT_STYLES: Record<Variant, { bg: string; fg: string; border: string }> = {
   primary: { bg: colors.ink, fg: "#fff", border: colors.ink },
   ghost: { bg: "transparent", fg: colors.ink, border: colors.line },
-  danger: { bg: "#fff", fg: "#A02E2E", border: "#E3B9B9" },
+  danger: { bg: "#fff", fg: "#841320", border: "#E4D5D1" },
   seal: { bg: colors.seal, fg: "#fff", border: colors.seal },
 };
 

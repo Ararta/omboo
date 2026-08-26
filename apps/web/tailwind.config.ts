@@ -5,11 +5,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#1B2A4A",
-        paper: "#F7F6F2",
-        seal: "#6B3FA0",
-        line: "#E3E0D8",
-        muted: "#7C8092",
+        // Omboo brand palette, matched to the live omboo.am marketing site (--ink/--offwhite/
+        // --coral/--gray-300/--gray-500).
+        ink: "#241619",
+        paper: "#FBF6F0",
+        seal: "#A6192E",
+        line: "#E4D5D1",
+        muted: "#8C7A78",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

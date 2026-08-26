@@ -39,7 +39,7 @@ export function NotificationBell() {
       >
         <Bell size={16} className="text-ink" />
         {unread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#A02E2E] px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#841320] px-1 text-[10px] font-bold text-white">
             {unread}
           </span>
         )}

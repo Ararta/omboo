@@ -88,7 +88,7 @@ export default function RegisterPage() {
               className="w-full rounded-md border border-line px-3 py-2 text-sm"
             />
           </div>
-          {error && <div className="text-[12.5px] text-[#A02E2E]">{error}</div>}
+          {error && <div className="text-[12.5px] text-[#841320]">{error}</div>}
           <button
             disabled={loading}
             type="submit"

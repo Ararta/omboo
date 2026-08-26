@@ -74,7 +74,7 @@ export function OrdersSection() {
   return (
     <>
       {preview && (
-        <Card className="mb-5" style={{ borderColor: "#6B3FA0" }}>
+        <Card className="mb-5" style={{ borderColor: "#A6192E" }}>
           <div className="mb-3 flex items-center gap-1.5">
             <FileText size={15} className="text-seal" />
             <div className="font-serif text-[15px] text-ink">

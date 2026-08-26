@@ -39,7 +39,7 @@ export function ReminderSection() {
   return (
     <Card className="mb-5" style={{ borderColor: "#E8C9C9" }}>
       <div className="mb-1.5 flex items-center gap-1.5">
-        <AlertTriangle size={15} color="#A02E2E" />
+        <AlertTriangle size={15} color="#841320" />
         <div className="font-serif text-[15px] text-ink">{ui.reminderPanelTitle}</div>
       </div>
       <div className="mb-2.5 text-xs text-muted">{ui.reminderPanelBody}</div>
@@ -47,7 +47,7 @@ export function ReminderSection() {
         <div key={e.id} className="flex flex-wrap items-center gap-2 border-t border-line py-2">
           <div className="min-w-[140px] flex-1">
             <div className="text-sm font-semibold text-ink">{e.name}</div>
-            <div className={`text-[11.5px] ${info.daysRemaining < 0 ? "text-[#A02E2E]" : "text-muted"}`}>
+            <div className={`text-[11.5px] ${info.daysRemaining < 0 ? "text-[#841320]" : "text-muted"}`}>
               {info.daysRemaining < 0 ? `Ուշացած է ${Math.abs(info.daysRemaining)} oրով` : `${info.daysRemaining} oր մնաց ժամկետից`}
             </div>
           </div>

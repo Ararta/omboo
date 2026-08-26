@@ -112,8 +112,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { fontSize: 12.5, color: colors.ink },
   chipTextActive: { color: "#fff" },
-  notice: { backgroundColor: "#F7F4FC", borderWidth: 1, borderColor: "#E4D9F5", borderRadius: 8, padding: 10, marginTop: 12 },
+  notice: { backgroundColor: "#F5E1E0", borderWidth: 1, borderColor: "#E4D5D1", borderRadius: 8, padding: 10, marginTop: 12 },
   noticeText: { fontSize: 12, color: colors.seal },
   daysText: { fontSize: 13, color: colors.muted, marginTop: 12 },
-  error: { fontSize: 12.5, color: "#A02E2E", marginTop: 8 },
+  error: { fontSize: 12.5, color: "#841320", marginTop: 8 },
 });

@@ -50,7 +50,7 @@ export function RecallsSection() {
       {recallable.length > 0 && (
         <>
           <div className="my-6 font-serif text-[17px] text-ink">Հետկանչել ընթացիկ/գալիք արձակուրդից</div>
-          {error && <div className="mb-2 text-[12.5px] text-[#A02E2E]">{error}</div>}
+          {error && <div className="mb-2 text-[12.5px] text-[#841320]">{error}</div>}
           {recallable.map((r) => {
             const draft = drafts[r.id] || {};
             return (

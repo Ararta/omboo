@@ -154,7 +154,7 @@ export default function RequestsPage() {
       {pendingRecalls.map((r) => (
         <Card key={"recall-" + r.id} className="mb-4" style={{ borderColor: "#E8C9C9", background: "#FBF5F5" }}>
           <div className="mb-1.5 flex items-center gap-1.5">
-            <RotateCcw size={15} color="#A02E2E" />
+            <RotateCcw size={15} color="#841320" />
             <div className="font-serif text-[15px] text-ink">Հայտ-դիմում՝ վաղաժամկետ վերադարձի մասին</div>
           </div>
           <div className="mb-2.5 text-[13px] text-[#4A4E5A]">
@@ -244,13 +244,13 @@ export default function RequestsPage() {
           />
         </div>
         {formError && (
-          <div className="mb-2.5 flex items-center gap-1.5 text-[12.5px] text-[#A02E2E]">
+          <div className="mb-2.5 flex items-center gap-1.5 text-[12.5px] text-[#841320]">
             <AlertCircle size={13} />
             {formError}
           </div>
         )}
         <div className="flex items-center justify-between">
-          <div className={`text-[13px] ${relevantBalance !== null && days > relevantBalance ? "text-[#A02E2E]" : "text-muted"}`}>
+          <div className={`text-[13px] ${relevantBalance !== null && days > relevantBalance ? "text-[#841320]" : "text-muted"}`}>
             {days > 0 ? `${days} աշխատանքային oր` : "Ընտրեք ամսաթվերը"}
             {relevantBalance !== null && days > relevantBalance && " — գերազանցում է մնացորդը"}
           </div>
@@ -274,7 +274,7 @@ export default function RequestsPage() {
               </div>
               {r.orderNumber && <div className="mt-1 font-mono text-xs text-seal">{r.orderNumber}</div>}
               {r.recall?.status === "FINALIZED" && (
-                <div className="mt-0.5 font-mono text-xs text-[#A02E2E]">{r.recall.orderNumber} (հետկանչում)</div>
+                <div className="mt-0.5 font-mono text-xs text-[#841320]">{r.recall.orderNumber} (հետկանչում)</div>
               )}
             </div>
             <div className="flex flex-col items-end gap-1.5">

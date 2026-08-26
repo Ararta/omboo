@@ -5,7 +5,7 @@ type Variant = "primary" | "ghost" | "danger" | "seal";
 const VARIANTS: Record<Variant, string> = {
   primary: "bg-ink text-white border border-ink",
   ghost: "bg-transparent text-ink border border-line",
-  danger: "bg-white text-[#A02E2E] border border-[#E3B9B9]",
+  danger: "bg-white text-[#841320] border border-[#E4D5D1]",
   seal: "bg-seal text-white border border-seal",
 };
 

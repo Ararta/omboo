@@ -1,9 +1,10 @@
 // Mirrors apps/web's Tailwind tokens (tailwind.config.ts) — same design system, ported to
 // React Native StyleSheet values since there's no Tailwind runtime on native.
+// Omboo brand palette, matched to the live omboo.am marketing site.
 export const colors = {
-  ink: "#1B2A4A",
-  paper: "#F7F6F2",
-  seal: "#6B3FA0",
-  line: "#E3E0D8",
-  muted: "#7C8092",
+  ink: "#241619",
+  paper: "#FBF6F0",
+  seal: "#A6192E",
+  line: "#E4D5D1",
+  muted: "#8C7A78",
 } as const;
