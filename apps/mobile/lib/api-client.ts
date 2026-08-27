@@ -16,11 +16,26 @@ export class ApiError extends Error {
   }
 }
 
-interface LoginResult {
+export interface PublicUser {
+  id: string;
+  email: string;
+  role: string;
+  employeeId: string | null;
+}
+
+export interface TokenPair {
   accessToken: string;
   refreshToken: string;
-  user: { id: string; email: string; role: string; employeeId: string | null };
+  user: PublicUser;
 }
+
+// Mirrors apps/api's AuthService.LoginResult union — HR/DIRECTOR accounts go through TOTP
+// two-factor before a session is issued, so a plain email+password submit doesn't always come
+// back with tokens directly.
+export type LoginResult =
+  | TokenPair
+  | { totpSetupRequired: true; setupToken: string; qrCodeDataUrl: string; secret: string }
+  | { requiresTotp: true; challengeToken: string };
 
 async function refresh(): Promise<boolean> {
   const refreshToken = await getRefreshToken();
@@ -69,16 +84,28 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
 };
 
-export async function login(email: string, password: string) {
-  const res = await fetch(`${API_URL}/api/auth/login`, {
+async function postAuth(path: string, body: unknown): Promise<LoginResult> {
+  const res = await fetch(`${API_URL}/api/auth/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
   const data = (await res.json()) as LoginResult & { message?: string; code?: string };
-  if (!res.ok) throw new ApiError(res.status, data.code, data.message ?? "Մուտքը ձախողվեց։");
-  await setTokens(data.accessToken, data.refreshToken);
-  return data.user;
+  if (!res.ok) throw new ApiError(res.status, data.code, (data as { message?: string }).message ?? "Մուտքը ձախողվեց։");
+  if ("accessToken" in data) await setTokens(data.accessToken, data.refreshToken);
+  return data;
+}
+
+export function login(email: string, password: string): Promise<LoginResult> {
+  return postAuth("login", { email, password });
+}
+
+export function confirmTotpSetup(setupToken: string, code: string): Promise<LoginResult> {
+  return postAuth("totp/setup-confirm", { setupToken, code });
+}
+
+export function verifyTotp(challengeToken: string, code: string): Promise<LoginResult> {
+  return postAuth("totp/verify", { challengeToken, code });
 }
 
 export async function logout(): Promise<void> {
