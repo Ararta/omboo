@@ -5,8 +5,13 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const session = decodeSession(req.cookies.get(ACCESS_COOKIE)?.value);
 
-  if (pathname === "/login" || pathname === "/register") {
+  if (pathname === "/login" || pathname === "/register" || pathname === "/register-organization") {
     if (session) return NextResponse.redirect(new URL(ROLE_HOME[session.role], req.url));
+    return NextResponse.next();
+  }
+
+  // Public, no session required — same rationale as login/register above.
+  if (pathname === "/privacy") {
     return NextResponse.next();
   }
 

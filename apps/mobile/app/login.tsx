@@ -100,9 +100,11 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>{loading ? "…" : "Մուտք գործել"}</Text>
             </Pressable>
 
-            <Text style={styles.hint}>
-              Ցուցադրական մուտքեր (գաղտնաբառ՝ omboo1234)՝{"\n"}ani.hakobyan@example.am, director@company.am
-            </Text>
+            {__DEV__ && (
+              <Text style={styles.hint}>
+                Ցուցադրական մուտքեր (գաղտնաբառ՝ omboo1234)՝{"\n"}ani.hakobyan@example.am, director@company.am
+              </Text>
+            )}
           </>
         )}
 

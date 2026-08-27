@@ -213,6 +213,12 @@ function LoginForm() {
             </form>
           </>
         )}
+
+        <div className="mt-6 text-center text-[11px] text-muted">
+          <Link href="/privacy" className="underline">
+            Գաղտնիության քաղաքականություն
+          </Link>
+        </div>
       </div>
     </div>
   );

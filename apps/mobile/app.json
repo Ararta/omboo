@@ -3,25 +3,48 @@
     "name": "Omboo",
     "slug": "omboo",
     "scheme": "omboo",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./assets/images/icon.png",
+    "backgroundColor": "#241619",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "am.omboo.mobile"
+      "bundleIdentifier": "am.omboo.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "am.omboo.mobile"
+      "package": "am.omboo.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon-foreground.png",
+        "backgroundColor": "#241619"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       "expo-asset",
       "expo-secure-store",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF6F0"
+        }
+      ],
+      [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Օգտագործվում է միայն այն պահին, երբ դուք սեղմում եք «Մուտք» կամ «Ելք»՝ ներկայության հաստատման համար։ Ֆոնային կամ շարունակական տեղորոշում չի կատարվում։"
+          "locationWhenInUsePermission": "Օգտագործվում է միայն այն պահին, երբ դուք սեղմում եք «Մուտք» կամ «Ելք»՝ ներկայության հաստատման համար։ Ֆոնային կամ շարունակական տեղորոշում չի կատարվում։"
         }
       ]
     ],
