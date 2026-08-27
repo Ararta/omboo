@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ROLE_HOME } from "../../lib/jwt";
+import { extractOrgSlugFromHost } from "../../lib/subdomain";
 import type { Role } from "@omboo/shared";
 
 type Step =
@@ -28,6 +29,11 @@ function LoginForm() {
   const [step, setStep] = useState<Step>({ kind: "password" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [orgSlug, setOrgSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrgSlug(extractOrgSlugFromHost(window.location.host));
+  }, []);
 
   function finishLogin(data: { user: { role: string } }) {
     const next = params.get("next");
@@ -100,7 +106,9 @@ function LoginForm() {
 
         {step.kind === "password" && (
           <>
-            <div className="mb-6 font-serif text-2xl font-bold text-ink">Մուտք</div>
+            <div className="mb-1 font-serif text-2xl font-bold text-ink">Մուտք</div>
+            {orgSlug && <div className="mb-5 text-[12.5px] text-muted">Կազմակերպություն՝ {orgSlug}</div>}
+            {!orgSlug && <div className="mb-5" />}
             <form onSubmit={submitPassword} className="flex flex-col gap-3">
               <div>
                 <label className="mb-1 block text-[11.5px] text-muted">Էլ. փոստ</label>

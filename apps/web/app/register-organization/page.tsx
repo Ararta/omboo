@@ -12,6 +12,7 @@ export default function RegisterOrganizationPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [orgLoginUrl, setOrgLoginUrl] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -28,6 +29,12 @@ export default function RegisterOrganizationPage() {
         setError(data.message ?? "Հայտը ձախողվեց։");
         return;
       }
+      // Every org's login lives on its own subdomain (<slug>.omboo.am, or <slug>.localhost in
+      // dev) — build that URL from wherever this page is actually being served from.
+      const { protocol, hostname, port } = window.location;
+      const rootHost = hostname === "localhost" || hostname.endsWith(".localhost") ? "localhost" : "omboo.am";
+      const portSuffix = port ? `:${port}` : "";
+      setOrgLoginUrl(`${protocol}//${orgSlug}.${rootHost}${portSuffix}/login`);
       setDone(true);
     } finally {
       setLoading(false);
@@ -41,11 +48,12 @@ export default function RegisterOrganizationPage() {
           <div className="mb-1 text-[11px] uppercase tracking-widest text-muted">Omboo · ՄՌԿ Թվային Հարթակ</div>
           <div className="mb-3 font-serif text-2xl font-bold text-ink">Կազմակերպությունը ստեղծված է</div>
           <p className="mb-6 text-sm text-muted">
-            Այժմ կարող եք մուտք գործել որպես տնoրեն ձեր էլ. փոստով և գաղտնաբառով։
+            Ձեր կազմակերպության մուտքի էջն այսուհետ՝ <span className="font-semibold text-ink">{orgSlug}.omboo.am</span>։ Մուտք գործեք
+            որպես տնoրեն ձեր էլ. փոստով և գաղտնաբառով։
           </p>
-          <Link href="/login" className="text-sm font-semibold text-seal underline">
+          <a href={orgLoginUrl ?? "/login"} className="text-sm font-semibold text-seal underline">
             Մուտք գործել
-          </Link>
+          </a>
         </div>
       </div>
     );

@@ -15,6 +15,7 @@ export interface PublicUser {
   email: string;
   role: User["role"];
   employeeId: string | null;
+  organizationSlug: string;
 }
 
 export interface TokenPair {
@@ -35,8 +36,8 @@ interface EphemeralPayload {
   purpose: "totp-setup" | "totp-challenge";
 }
 
-function toPublicUser(user: User): PublicUser {
-  return { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId };
+function toPublicUser(user: User, organizationSlug: string): PublicUser {
+  return { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId, organizationSlug };
 }
 
 export type LoginResult =
@@ -252,6 +253,13 @@ export class AuthService {
       },
     });
 
-    return { accessToken, refreshToken, user: toPublicUser(user) };
+    // organizations carries no RLS (see the enable_rls migration) and isn't tenant-scoped by the
+    // Layer 1 extension either, so this resolves regardless of whether a request context is set.
+    const org = await this.prisma.client.organization.findUniqueOrThrow({
+      where: { id: user.organizationId },
+      select: { slug: true },
+    });
+
+    return { accessToken, refreshToken, user: toPublicUser(user, org.slug) };
   }
 }
