@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Self-contained server bundle (server.js + only the node_modules it actually needs) — keeps
+  // the production Docker image lean instead of shipping the whole workspace node_modules tree.
+  output: "standalone",
   transpilePackages: ["@omboo/shared"],
   webpack: (config) => {
     // @omboo/shared uses NodeNext-style ESM imports ("./date-utils.js" resolving to

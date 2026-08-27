@@ -1,0 +1,136 @@
+# Production stack for a single VPS. db/minio are NOT published to the host — only Caddy's
+# 80/443 are — everything else talks to everything else over the private "omboo" network by
+# service name. Bring up with:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+name: omboo
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: omboo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: omboo
+    volumes:
+      - omboo_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omboo -d omboo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
+    volumes:
+      - omboo_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${S3_ACCESS_KEY_ID} $${S3_SECRET_ACCESS_KEY} &&
+      mc mb -p local/${S3_BUCKET} &&
+      mc anonymous set download local/${S3_BUCKET}
+      "
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+
+  # One-shot: applies pending Prisma migrations (including the one that creates the
+  # unprivileged omboo_app role RLS depends on) using the superuser DATABASE_URL, then exits.
+  # `api` waits for this to succeed before starting.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["pnpm", "--filter", "@omboo/database", "exec", "prisma", "migrate", "deploy"]
+
+  # One-shot: the enable_rls migration creates the omboo_app role with a fixed, publicly-known
+  # dev password (it has to be a literal in a checksummed migration file) — this rotates it to
+  # the real secret from .env.production immediately after migrate runs, before anything
+  # connects as omboo_app for the first time.
+  rotate-app-password:
+    image: postgres:16-alpine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    entrypoint: ["sh", "-c"]
+    command:
+      - psql -h db -U omboo -d omboo -c "ALTER ROLE omboo_app WITH PASSWORD '$$APP_DB_PASSWORD';"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      rotate-app-password:
+        condition: service_completed_successfully
+    env_file: .env.production
+    environment:
+      API_PORT: "4000"
+      # Refresh-token cookies (both here and in apps/web) only get the `secure` flag when this
+      # is set — required for them to survive being sent over HTTPS through Caddy.
+      NODE_ENV: production
+    expose:
+      - "4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    depends_on:
+      - api
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - omboo_caddy_data:/data
+      - omboo_caddy_config:/config
+
+volumes:
+  omboo_db_data:
+  omboo_minio_data:
+  omboo_caddy_data:
+  omboo_caddy_config:

@@ -1,0 +1,11 @@
+# Reverse proxy + automatic HTTPS (Let's Encrypt, HTTP-01 challenge — needs no DNS provider API
+# token, just these two A records pointing at the server's IP). omboo.am itself is the separate
+# marketing site and is NOT handled here.
+
+app.omboo.am {
+	reverse_proxy web:3000
+}
+
+api.omboo.am {
+	reverse_proxy api:4000
+}
