@@ -11,3 +11,32 @@ body {
   color: #241619;
   font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Shared between the TipTap editor (RichTextEditor) and read-only display of the same
+   contentHtml elsewhere (document preview before signing, etc.) so both look identical. */
+.rich-text-content h2 {
+  margin: 14px 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #241619;
+}
+.rich-text-content h3 {
+  margin: 12px 0 5px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #241619;
+}
+.rich-text-content p {
+  margin: 0 0 8px;
+}
+.rich-text-content ul,
+.rich-text-content ol {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+.rich-text-content li {
+  margin-bottom: 3px;
+}
+.rich-text-content strong {
+  font-weight: 700;
+}

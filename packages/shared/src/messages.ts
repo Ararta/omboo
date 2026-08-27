@@ -71,6 +71,12 @@ export const notifications = {
   recallDeclinedForHR: (employeeName: string) => `${employeeName}-ը մերժել է վաղաժամկետ վերադարձի հայտ-դիմումը։`,
   recallFinalizedForEmployee: (delta: number) => `Հետկանչման հրամանը կազմված է. Ձեր մնացորդին վերադարձվել է ${delta} oր։`,
   balanceManuallyAdjusted: (next: number) => `Ձեր արձակուրդային մնացորդը ձեռքով ուղղվել է ${next} oրի (ՄՌԿ մասնագետի կողմից)։`,
+  documentPendingEmployeeSignature: (title: string) => `«${title}» փաստաթուղթը սպասում է Ձեր ստորագրությանը։`,
+  documentPendingDirectorSignature: (title: string, employeeName: string) =>
+    `${employeeName}-ի ստորագրած «${title}» փաստաթուղթը սպասում է Ձեր ստորագրությանը։`,
+  documentCompletedForEmployee: (title: string) => `«${title}» փաստաթուղթը ստորագրված է երկու կողմից և ավարտված է։`,
+  documentCompletedForHR: (title: string, employeeName: string) =>
+    `${employeeName}-ի «${title}» փաստաթուղթը ստորագրված է երկու կողմից և ավելացվել է Փաստաթղթերի գրադարան։`,
 } as const;
 
 export const historySteps = {

@@ -1,4 +1,4 @@
-import type { DocumentCategory, RecallStatus, RequestStatus, RequestType } from "@omboo/shared";
+import type { DocumentCategory, GeneratedDocumentStatus, RecallStatus, RequestStatus, RequestType, TemplateCategory } from "@omboo/shared";
 
 export interface EmployeeView {
   id: string;
@@ -120,4 +120,29 @@ export interface DocumentView {
   uploadedByUserId: string;
   createdAt: string;
   employee?: { id: string; name: string; position: string };
+}
+
+export interface DocumentTemplateView {
+  id: string;
+  name: string;
+  category: TemplateCategory;
+  contentHtml: string;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeneratedDocumentView {
+  id: string;
+  templateId: string;
+  employeeId: string;
+  title: string;
+  category: TemplateCategory;
+  contentHtml: string;
+  status: GeneratedDocumentStatus;
+  employeeSignedAt: string | null;
+  directorSignedAt: string | null;
+  createdAt: string;
+  employee?: { id: string; name: string; position: string };
+  template?: { name: string };
 }

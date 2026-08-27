@@ -15,18 +15,20 @@ import {
   type RequestType,
 } from "@omboo/shared";
 import { api, ApiError } from "../../../lib/api-client";
-import type { EmployeeView, RequestView } from "../../../lib/types";
+import type { EmployeeView, GeneratedDocumentView, RequestView } from "../../../lib/types";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Seal } from "../../../components/ui/Seal";
 import { StatusPill } from "../../../components/ui/StatusPill";
 import { Timeline } from "../../../components/ui/Timeline";
 import { TeamOutCard } from "../../../components/TeamOutCard";
+import { PendingSignatureList } from "../../../components/PendingSignatureList";
 
 export default function RequestsPage() {
   const [me, setMe] = useState<EmployeeView | null>(null);
   const [myRequests, setMyRequests] = useState<RequestView[]>([]);
   const [teamOut, setTeamOut] = useState<RequestView[]>([]);
+  const [pendingDocs, setPendingDocs] = useState<GeneratedDocumentView[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState<{ type: RequestType; start: string; end: string; reason: string }>({
@@ -39,14 +41,16 @@ export default function RequestsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   async function loadAll() {
-    const [meRes, reqRes, teamRes] = await Promise.all([
+    const [meRes, reqRes, teamRes, docsRes] = await Promise.all([
       api.get<EmployeeView>("/employees/me"),
       api.get<RequestView[]>("/requests/mine"),
       api.get<RequestView[]>("/requests/team-out"),
+      api.get<GeneratedDocumentView[]>("/generated-documents/mine"),
     ]);
     setMe(meRes);
     setMyRequests(reqRes);
     setTeamOut(teamRes);
+    setPendingDocs(docsRes.filter((d) => d.status === "PENDING_EMPLOYEE_SIGNATURE"));
     setLoading(false);
   }
 
@@ -113,6 +117,13 @@ export default function RequestsPage() {
 
   return (
     <div>
+      <PendingSignatureList
+        title="Փաստաթղթեր՝ սպասում են Ձեր ստորագրությանը"
+        docs={pendingDocs}
+        signPath={(id) => `/generated-documents/${id}/sign-employee`}
+        onSigned={loadAll}
+      />
+
       <Card className="mb-4">
         <div className="flex flex-wrap items-center gap-5">
           <div>

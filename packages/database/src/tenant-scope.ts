@@ -26,6 +26,8 @@ const TENANT_MODELS = new Set([
   "Notification",
   "BalanceAdjustmentLog",
   "AuditLog",
+  "DocumentTemplate",
+  "GeneratedDocument",
 ]);
 
 const WHERE_FILTER_OPS = new Set([

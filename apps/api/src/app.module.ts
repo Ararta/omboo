@@ -19,6 +19,7 @@ import { StorageModule } from "./modules/storage/storage.module";
 import { EmailModule } from "./modules/email/email.module";
 import { AttendanceModule } from "./modules/attendance/attendance.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
+import { DocumentTemplatesModule } from "./modules/document-templates/document-templates.module";
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { DocumentsModule } from "./modules/documents/documents.module";
     EmailModule,
     AttendanceModule,
     DocumentsModule,
+    DocumentTemplatesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

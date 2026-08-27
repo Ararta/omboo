@@ -72,6 +72,8 @@ model Organization {
   balanceAdjustments  BalanceAdjustmentLog[]
   auditLogs           AuditLog[]
   refreshTokens       RefreshToken[]
+  documentTemplates   DocumentTemplate[]
+  generatedDocuments  GeneratedDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -178,6 +180,7 @@ model Employee {
   balanceAdjustments BalanceAdjustmentLog[]
   attendanceLogs     AttendanceLog[]
   documents          EmployeeDocument[]
+  generatedDocuments GeneratedDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,9 +190,16 @@ model Employee {
   @@map("employees")
 }
 
+// CONTRACT/AGREEMENT/ORDER/STATEMENT/CLAIM double as the five DocumentTemplate categories
+// (պայմանագրեր/համաձայնագրեր/հրամաններ/դիմումներ/հայտեր) — CERTIFICATE/ID_DOCUMENT/OTHER exist
+// only for the plain manual-upload flow (EmployeeDocument), never as a template category
+// (enforced by createTemplateSchema in packages/shared, not the DB).
 enum DocumentCategory {
   CONTRACT
+  AGREEMENT
   ORDER
+  STATEMENT
+  CLAIM
   CERTIFICATE
   ID_DOCUMENT
   OTHER
@@ -214,6 +224,10 @@ model EmployeeDocument {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  // Set when this row is the final signed PDF of a GeneratedDocument (see that model) rather
+  // than a plain HR upload — same library, same download/list UI, no special-casing needed there.
+  generatedDocument GeneratedDocument?
 
   createdAt DateTime @default(now())
 
@@ -426,4 +440,78 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([organizationId])
   @@map("audit_log")
+}
+
+// HR authors these once per document type their organization actually uses (a standard
+// employment contract, an NDA, a generic order template, etc.) — free-form rich text
+// (contentHtml, authored in the web app's TipTap editor) with {{placeholder}} tokens. Known
+// tokens (employeeName, companyName, today, ...) are auto-filled at generation time from
+// Employee/OrgSettings data; any other {{token}} found in the content becomes a field HR fills
+// in by hand each time they generate a document from this template (see
+// DocumentTemplatesService.findCustomFields).
+model DocumentTemplate {
+  id          String           @id @default(cuid())
+  name        String
+  category    DocumentCategory
+  contentHtml String
+
+  createdByUserId String
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  generatedDocuments GeneratedDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, category])
+  @@map("document_templates")
+}
+
+// PENDING_EMPLOYEE_SIGNATURE -> PENDING_DIRECTOR_SIGNATURE -> COMPLETED
+//                            -> CANCELLED (HR withdrew it before either signature)
+enum GeneratedDocumentStatus {
+  PENDING_EMPLOYEE_SIGNATURE
+  PENDING_DIRECTOR_SIGNATURE
+  COMPLETED
+  CANCELLED
+}
+
+// One instance of a DocumentTemplate filled in for one Employee. contentHtml is a snapshot
+// taken at generation time (placeholders already resolved) — editing the source template later
+// never changes documents already generated from it. "Signing" is a click-to-confirm action
+// (employeeSignedAt/By, then directorSignedAt/By), not a drawn or uploaded signature image;
+// once both are present the final PDF is rendered and filed into EmployeeDocument automatically.
+model GeneratedDocument {
+  id         String   @id @default(cuid())
+  templateId String
+  template   DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  title       String
+  category    DocumentCategory
+  contentHtml String
+  status      GeneratedDocumentStatus @default(PENDING_EMPLOYEE_SIGNATURE)
+
+  createdByUserId String
+
+  employeeSignedAt       DateTime?
+  employeeSignedByUserId String?
+  directorSignedAt       DateTime?
+  directorSignedByUserId String?
+
+  finalDocumentId String?           @unique
+  finalDocument   EmployeeDocument? @relation(fields: [finalDocumentId], references: [id])
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([employeeId])
+  @@map("generated_documents")
 }

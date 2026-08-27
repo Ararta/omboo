@@ -4,25 +4,29 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Check, X } from "lucide-react";
 import { fmtDateHY, REQUEST_TYPE_LABELS } from "@omboo/shared";
 import { api } from "../../lib/api-client";
-import type { RequestView } from "../../lib/types";
+import type { GeneratedDocumentView, RequestView } from "../../lib/types";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { TeamOutCard } from "../../components/TeamOutCard";
 import { AccessRequestsCard } from "../../components/AccessRequestsCard";
+import { PendingSignatureList } from "../../components/PendingSignatureList";
 
 export default function DirectorPage() {
   const [pending, setPending] = useState<RequestView[]>([]);
   const [teamOut, setTeamOut] = useState<RequestView[]>([]);
+  const [pendingDocs, setPendingDocs] = useState<GeneratedDocumentView[]>([]);
   const [rejectDraft, setRejectDraft] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   async function loadAll() {
-    const [pendingRes, teamRes] = await Promise.all([
+    const [pendingRes, teamRes, docsRes] = await Promise.all([
       api.get<RequestView[]>("/requests/pending-director"),
       api.get<RequestView[]>("/requests/team-out"),
+      api.get<GeneratedDocumentView[]>("/generated-documents/pending-director"),
     ]);
     setPending(pendingRes);
     setTeamOut(teamRes);
+    setPendingDocs(docsRes);
     setLoading(false);
   }
 
@@ -41,6 +45,13 @@ export default function DirectorPage() {
   return (
     <div>
       <AccessRequestsCard />
+      <PendingSignatureList
+        title="Փաստաթղթեր՝ սպասում են Ձեր ստորագրությանը"
+        docs={pendingDocs}
+        signPath={(id) => `/generated-documents/${id}/sign-director`}
+        onSigned={loadAll}
+        showEmployeeName
+      />
       <TeamOutCard requests={teamOut} />
 
       <div className="mb-2.5 font-serif text-[17px] text-ink">Հաստատման սպասող հայտ-դիմումներ ({pending.length})</div>

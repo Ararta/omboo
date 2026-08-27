@@ -32,11 +32,10 @@ COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
 RUN pnpm --filter @omboo/database exec prisma generate
 RUN turbo run build --filter=@omboo/api
-# nest-cli.json's asset-copy (the .hbs order template) is timing-sensitive under turbo/Docker's
-# filesystem and isn't reliably done by the time the build step above exits — copy it explicitly
-# rather than trust it landed.
-RUN mkdir -p apps/api/dist/modules/orders/templates && \
-    cp apps/api/src/modules/orders/templates/order-document.hbs apps/api/dist/modules/orders/templates/
+# nest-cli.json's asset-copy (the .hbs PDF templates) is timing-sensitive under turbo/Docker's
+# filesystem and isn't reliably done by the time the build step above exits — copy every .hbs
+# under src into the matching dist path explicitly rather than trust it landed.
+RUN cd apps/api/src && find . -name '*.hbs' -exec sh -c 'mkdir -p "../dist/$(dirname "$1")" && cp "$1" "../dist/$1"' _ {} \;
 
 # --- runtime: Debian slim (not Alpine) — Puppeteer's bundled Chromium needs glibc, and this
 # is the base image Puppeteer's own docs recommend pairing it with ---

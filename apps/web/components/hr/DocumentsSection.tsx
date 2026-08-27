@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { FolderOpen, Download, Trash2, Upload } from "lucide-react";
-import { DOCUMENT_CATEGORY_LABELS, type DocumentCategory } from "@omboo/shared";
+import { DOCUMENT_CATEGORY_LABELS, TEMPLATE_CATEGORIES, TEMPLATE_CATEGORY_LABELS, type DocumentCategory, type TemplateCategory } from "@omboo/shared";
 import { api, ApiError } from "../../lib/api-client";
 import type { DocumentView, EmployeeView } from "../../lib/types";
 import { Card } from "../ui/Card";
+import { TemplateCategoryPanel } from "./TemplateCategoryPanel";
+
+type LibraryTab = "all" | TemplateCategory;
+
+const LIBRARY_TABS: { id: LibraryTab; label: string }[] = [
+  { id: "all", label: "Բոլոր փաստաթղթերը" },
+  ...TEMPLATE_CATEGORIES.map((c) => ({ id: c, label: TEMPLATE_CATEGORY_LABELS[c] })),
+];
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -20,6 +28,7 @@ function fmtDate(iso: string): string {
 }
 
 export function DocumentsSection() {
+  const [activeTab, setActiveTab] = useState<LibraryTab>("all");
   const [employees, setEmployees] = useState<EmployeeView[]>([]);
   const [docs, setDocs] = useState<DocumentView[]>([]);
   const [employeeFilter, setEmployeeFilter] = useState("ALL");
@@ -40,9 +49,10 @@ export function DocumentsSection() {
   }
 
   useEffect(() => {
+    if (activeTab !== "all") return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employeeFilter]);
+  }, [employeeFilter, activeTab]);
 
   async function upload() {
     if (!uploadEmployeeId || !title.trim() || !file) return;
@@ -87,6 +97,24 @@ export function DocumentsSection() {
     <>
       <div className="my-6 font-serif text-[17px] text-ink">Փաստաթղթերի գրադարան</div>
 
+      <div className="mb-3.5 flex flex-wrap gap-1.5">
+        {LIBRARY_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition ${
+              activeTab === tab.id ? "bg-ink text-white" : "border border-line bg-white text-ink hover:bg-paper"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab !== "all" ? (
+        <TemplateCategoryPanel category={activeTab} />
+      ) : (
+        <>
       <Card className="mb-3.5">
         <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-seal">
           <Upload size={13} />
@@ -182,6 +210,8 @@ export function DocumentsSection() {
           </div>
         ))}
       </Card>
+        </>
+      )}
     </>
   );
 }
