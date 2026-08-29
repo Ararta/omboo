@@ -140,7 +140,9 @@ function LoginForm() {
               </button>
             </form>
             <div className="mt-6 flex flex-col gap-2 text-[11px] text-muted">
-              <div>Ցուցադրական մուտքեր (գաղտնաբառ՝ omboo1234)՝ ani.hakobyan@example.am, director@company.am, hr@company.am</div>
+              {process.env.NODE_ENV !== "production" && (
+                <div>Ցուցադրական մուտքեր (գաղտնաբառ՝ omboo1234)՝ ani.hakobyan@example.am, director@company.am, hr@company.am</div>
+              )}
               <Link href="/register" className="font-semibold text-seal underline">
                 Խնդրե՞լ մուտքի իրավունք ՄՌԿ մասնագետի համար
               </Link>
