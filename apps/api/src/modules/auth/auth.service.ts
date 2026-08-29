@@ -105,9 +105,14 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Also pre-auth — this request has no org context from a JWT, so wrap explicitly and open
-    // its own transaction directly on the base client (see registerOrganization above).
+    // its own transaction directly on the base client (see registerOrganization above). Unlike
+    // registerOrganization, this path writes to `notifications`, which IS RLS-enabled — so the
+    // Postgres session variable RLS checks against (normally set by TenantTransactionInterceptor
+    // for authenticated requests) has to be set here by hand, or the notifyRole insert below
+    // gets rejected with a "row-level security policy" error.
     await runWithOrgId(org.id, () =>
       this.prisma.extended.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.current_org_id', ${org.id}, true)`;
         await tx.user.create({
           data: { organizationId: org.id, name, email, passwordHash, role: "HR", pendingApproval: true },
         });
