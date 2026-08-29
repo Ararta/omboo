@@ -1,18 +1,20 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { distanceMeters } from "@omboo/shared";
 import type { AttendanceManualCreateInput, AttendanceUpdateInput, GpsPointInput } from "@omboo/shared";
-import { getOrgId } from "@omboo/database";
+import { Prisma, getOrgId } from "@omboo/database";
 import { PrismaService } from "../../common/prisma/prisma.service";
 
 @Injectable()
 export class AttendanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Throws if a geofence is configured and `point` falls outside it. No-op (returns) when
-   * HR hasn't set an office location yet — check-in/out is unrestricted until then. */
-  private async assertWithinGeofence(point: GpsPointInput): Promise<void> {
+  /** Returns null when HR hasn't set an office location yet (check-in/out is unrestricted,
+   * and the "within geofence" question doesn't apply — stored as null, not true, so historical
+   * entries don't misleadingly read as geofence-verified). Returns true when a geofence is
+   * configured and `point` falls inside it; throws if it falls outside. */
+  private async checkGeofence(point: GpsPointInput): Promise<boolean | null> {
     const org = await this.prisma.client.orgSettings.findUnique({ where: { organizationId: getOrgId() } });
-    if (org?.officeLat == null || org?.officeLng == null) return;
+    if (org?.officeLat == null || org?.officeLng == null) return null;
 
     const distance = distanceMeters(point, { lat: org.officeLat, lng: org.officeLng });
     if (distance > org.geofenceRadiusMeters) {
@@ -20,6 +22,7 @@ export class AttendanceService {
         `Դուք գտնվում եք աշխատավայրից ${Math.round(distance)} մ հեռավորության վրա (թույլատրելի է մինչև ${org.geofenceRadiusMeters} մ)։`,
       );
     }
+    return true;
   }
 
   async checkIn(employeeId: string, point: GpsPointInput) {
@@ -28,17 +31,28 @@ export class AttendanceService {
     });
     if (open) throw new ConflictException("Դուք արդեն նշված եք որպես ներկա, նախ նշեք ելքը։");
 
-    await this.assertWithinGeofence(point);
-    return this.prisma.client.attendanceLog.create({
-      data: {
-        employeeId,
-        organizationId: getOrgId(),
-        checkInAt: new Date(),
-        checkInLat: point.lat,
-        checkInLng: point.lng,
-        checkInWithinGeofence: true,
-      },
-    });
+    const withinGeofence = await this.checkGeofence(point);
+    try {
+      return await this.prisma.client.attendanceLog.create({
+        data: {
+          employeeId,
+          organizationId: getOrgId(),
+          checkInAt: new Date(),
+          checkInLat: point.lat,
+          checkInLng: point.lng,
+          checkInWithinGeofence: withinGeofence,
+        },
+      });
+    } catch (e) {
+      // The findFirst check above is a fast pre-check, not the real guard — two concurrent
+      // check-ins from the same employee (double-tap, retry) can both pass it. The partial
+      // unique index (see migration attendance_open_session_unique) is what actually prevents
+      // two open sessions; translate its violation into the same friendly message.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        throw new ConflictException("Դուք արդեն նշված եք որպես ներկա, նախ նշեք ելքը։");
+      }
+      throw e;
+    }
   }
 
   async checkOut(employeeId: string, point: GpsPointInput) {
@@ -48,14 +62,14 @@ export class AttendanceService {
     });
     if (!open) throw new NotFoundException("Բաց մուտքի գրանցում չի գտնվել, նախ նշեք մուտքը։");
 
-    await this.assertWithinGeofence(point);
+    const withinGeofence = await this.checkGeofence(point);
     return this.prisma.client.attendanceLog.update({
       where: { id: open.id },
       data: {
         checkOutAt: new Date(),
         checkOutLat: point.lat,
         checkOutLng: point.lng,
-        checkOutWithinGeofence: true,
+        checkOutWithinGeofence: withinGeofence,
       },
     });
   }

@@ -45,7 +45,7 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-20 max-h-[340px] w-[300px] overflow-y-auto rounded-[10px] border border-line bg-white shadow-lg">
+        <div className="absolute right-0 top-11 z-20 max-h-[340px] w-[min(85vw,280px)] overflow-y-auto rounded-[10px] border border-line bg-white shadow-lg">
           <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
             <span className="text-xs font-bold text-ink">Ծանուցումներ</span>
             {unread > 0 && (

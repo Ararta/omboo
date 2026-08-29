@@ -118,6 +118,11 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    # Explicit IPv4 DNS — some hosts advertise an unreachable IPv6 resolver in resolv.conf,
+    # which breaks the ACME (Let's Encrypt) lookup for TLS cert issuance from inside the container.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       - api
       - web

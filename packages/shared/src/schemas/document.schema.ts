@@ -75,6 +75,10 @@ export const KNOWN_PLACEHOLDER_FIELDS = [
   "today",
 ] as const;
 
+// Single source of truth for the {{token}} shape — both custom-field detection and
+// generation-time substitution must agree on exactly what counts as a placeholder.
+export const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+
 export const KNOWN_PLACEHOLDER_LABELS: Record<(typeof KNOWN_PLACEHOLDER_FIELDS)[number], string> = {
   employeeName: "Աշխատողի անուն",
   employeePosition: "Աշխատողի պաշտոն",

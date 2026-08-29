@@ -40,8 +40,12 @@ export class EmployeesController {
 
   @Patch(":id")
   @Roles("HR")
-  update(@Param("id") id: string, @Body(new ZodValidationPipe(updateEmployeeSchema)) dto: UpdateEmployeeInput) {
-    return this.employees.update(id, dto);
+  update(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(updateEmployeeSchema)) dto: UpdateEmployeeInput,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.employees.update(id, dto, user.userId);
   }
 
   @Patch(":id/balance")

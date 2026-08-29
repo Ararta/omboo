@@ -1,11 +1,13 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, getOrgId } from "@omboo/database";
-import { KNOWN_PLACEHOLDER_FIELDS, type CreateTemplateInput, type TemplateCategory, type UpdateTemplateInput } from "@omboo/shared";
+import {
+  KNOWN_PLACEHOLDER_FIELDS,
+  PLACEHOLDER_RE,
+  type CreateTemplateInput,
+  type TemplateCategory,
+  type UpdateTemplateInput,
+} from "@omboo/shared";
 import { PrismaService } from "../../common/prisma/prisma.service";
-
-// Matches "{{fieldName}}" tokens HR types directly into the rich-text template content —
-// deliberately simple (no custom TipTap node type): typing the literal text is enough.
-const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
 @Injectable()
 export class DocumentTemplatesService {

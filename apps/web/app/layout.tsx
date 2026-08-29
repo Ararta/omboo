@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Armenian, Noto_Serif_Armenian } from "next/font/google";
 import "./globals.css";
 
@@ -19,6 +19,11 @@ const serif = Noto_Serif_Armenian({
 export const metadata: Metadata = {
   title: "Omboo — ՄՌԿ Թվային Հարթակ",
   description: "Արձակուրդի/բացակայության հայտ-դիմումների կառավարում",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

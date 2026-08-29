@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { router } from "expo-router";
 import { View, Text, TextInput, Pressable, Image, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
-import { ApiError, confirmTotpSetup, login, verifyTotp, type LoginResult, type PublicUser } from "../lib/api-client";
+import { ApiError, confirmTotpSetup, login, logout, verifyTotp, type LoginResult, type PublicUser } from "../lib/api-client";
 import { useSession } from "../lib/session-context";
 import { colors } from "../lib/theme";
 
@@ -12,9 +12,14 @@ type Step =
 
 // HR has no mobile screens yet (see app/index.tsx) — but HR accounts also go through TOTP
 // (same as DIRECTOR), so the "web only" message can only be shown once the final token
-// response comes back and reveals the role, not before.
-function afterLogin(user: PublicUser, refreshSession: () => Promise<void>): { blocked: boolean } {
-  if (user.role === "HR") return { blocked: true };
+// response comes back and reveals the role, not before. By that point api-client's postAuth
+// has already written a real, working token pair to SecureStore — log back out immediately
+// (revoking it server-side too) rather than leaving a live, unused credential on the device.
+async function afterLogin(user: PublicUser, refreshSession: () => Promise<void>): Promise<{ blocked: boolean }> {
+  if (user.role === "HR") {
+    await logout();
+    return { blocked: true };
+  }
   void refreshSession();
   return { blocked: false };
 }
@@ -37,7 +42,7 @@ export default function LoginScreen() {
       setStep({ kind: "totp-challenge", challengeToken: result.challengeToken });
       return;
     }
-    const { blocked } = afterLogin(result.user, refreshSession);
+    const { blocked } = await afterLogin(result.user, refreshSession);
     if (blocked) {
       setError("ՄՌԿ մասնագետի աշխատատեղը դեռ հասանելի է միայն վեբ հավելվածում։");
       return;

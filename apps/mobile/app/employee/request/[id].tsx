@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { ScrollView, View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { ScrollView, View, Text, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { fmtDateHY, REQUEST_TYPE_LABELS } from "@omboo/shared";
-import { api } from "../../../lib/api-client";
+import { api, ApiError } from "../../../lib/api-client";
+import { useSession } from "../../../lib/session-context";
 import type { RequestView } from "../../../lib/types";
 import { Card } from "../../../components/ui/Card";
 import { StatusPill } from "../../../components/ui/StatusPill";
@@ -12,13 +13,21 @@ import { colors } from "../../../lib/theme";
 
 export default function RequestDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { refreshSession } = useSession();
   const [request, setRequest] = useState<RequestView | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    const all = await api.get<RequestView[]>("/requests/mine");
-    setRequest(all.find((r) => r.id === id) ?? null);
-    setLoading(false);
+    try {
+      const all = await api.get<RequestView[]>("/requests/mine");
+      setRequest(all.find((r) => r.id === id) ?? null);
+    } catch (e) {
+      await refreshSession();
+      const message = e instanceof ApiError ? e.message : "Չհաջողվեց բեռնել հայտ-դիմումը։";
+      Alert.alert("Սխալ", message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useFocusEffect(
@@ -30,14 +39,27 @@ export default function RequestDetailScreen() {
 
   async function cancel() {
     if (!request) return;
-    await api.post(`/requests/${request.id}/cancel`);
-    load();
+    try {
+      await api.post(`/requests/${request.id}/cancel`);
+      load();
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Չհաջողվեց հետ կանչել, փորձեք կրկին։";
+      Alert.alert("Սխալ", message);
+    }
   }
 
-  if (loading || !request) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.seal} />
+      </View>
+    );
+  }
+
+  if (!request) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.muted}>Հայտ-դիմումը չի գտնվել։</Text>
       </View>
     );
   }

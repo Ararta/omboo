@@ -193,6 +193,12 @@ export class RequestsService {
    * reminder cron itself (see reminders.service.ts). */
   async hrScheduleVacation(dto: HrScheduleVacationInput) {
     const employee = await this.prisma.client.employee.findUniqueOrThrow({ where: { id: dto.employeeId } });
+    if (dto.days > employee.balance) {
+      throw new DomainValidationError(
+        "INSUFFICIENT_BALANCE",
+        `Աշխատողի մնացորդը (${employee.balance} oր) պակաս է հայտվող oրերի քանակից (${dto.days} oր)։`,
+      );
+    }
     const end = addDaysISO(dto.start, Math.max(0, dto.days - 1));
     const today = todayInYerevan();
 
@@ -218,7 +224,7 @@ export class RequestsService {
         actorDisplayName: HR_ACTOR,
       },
     });
-    const nextBalance = Math.max(0, employee.balance - dto.days);
+    const nextBalance = employee.balance - dto.days;
     await tx.employee.update({
       where: { id: dto.employeeId },
       data: { balance: nextBalance, lastVacationRequestDate: new Date(today), lastReminderFired: null },

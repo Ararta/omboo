@@ -1,6 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { getOrgId } from "@omboo/database";
-import { fmtDateHY, notifications, todayInYerevan, type GenerateDocumentInput, type GeneratedDocumentStatus } from "@omboo/shared";
+import {
+  fmtDateHY,
+  notifications,
+  PLACEHOLDER_RE,
+  todayInYerevan,
+  type GenerateDocumentInput,
+  type GeneratedDocumentStatus,
+} from "@omboo/shared";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { OrgSettingsService } from "../org-settings/org-settings.service";
@@ -9,8 +16,6 @@ import type { AuthenticatedUser } from "../auth/jwt.strategy";
 import { toISODate } from "../requests/request-mappers";
 import { DocumentTemplatesService } from "./document-templates.service";
 import { GeneratedDocumentPdfService } from "./generated-document-pdf.service";
-
-const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
 function fmtSignedAt(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");

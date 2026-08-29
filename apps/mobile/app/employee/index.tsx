@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
-import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Alert } from "react-native";
 import { fmtDateHY, REQUEST_TYPE_LABELS } from "@omboo/shared";
-import { api, logout as apiLogout } from "../../lib/api-client";
+import { api, ApiError, logout as apiLogout } from "../../lib/api-client";
 import { useSession } from "../../lib/session-context";
 import type { EmployeeView, RequestView } from "../../lib/types";
 import { Card } from "../../components/ui/Card";
@@ -22,15 +22,25 @@ export default function EmployeeHome() {
   const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
-    const [meRes, reqRes, teamRes] = await Promise.all([
-      api.get<EmployeeView>("/employees/me"),
-      api.get<RequestView[]>("/requests/mine"),
-      api.get<RequestView[]>("/requests/team-out"),
-    ]);
-    setMe(meRes);
-    setRequests(reqRes);
-    setTeamOut(teamRes);
-    setLoading(false);
+    try {
+      const [meRes, reqRes, teamRes] = await Promise.all([
+        api.get<EmployeeView>("/employees/me"),
+        api.get<RequestView[]>("/requests/mine"),
+        api.get<RequestView[]>("/requests/team-out"),
+      ]);
+      setMe(meRes);
+      setRequests(reqRes);
+      setTeamOut(teamRes);
+    } catch (e) {
+      // A stale/expired session (refresh failed, tokens cleared) lands here — re-sync the
+      // session context so the layout guard's `!session` check picks it up and redirects to
+      // /login, instead of leaving the screen stuck on its spinner forever.
+      await refreshSession();
+      const message = e instanceof ApiError ? e.message : "Չհաջողվեց բեռնել տվյալները։";
+      Alert.alert("Սխալ", message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useFocusEffect(
@@ -46,8 +56,13 @@ export default function EmployeeHome() {
   }
 
   async function respondRecall(requestId: string, accept: boolean) {
-    await api.patch(`/recalls/${requestId}/respond`, { accept });
-    load();
+    try {
+      await api.patch(`/recalls/${requestId}/respond`, { accept });
+      load();
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Չհաջողվեց ուղարկել պատասխանը, փորձեք կրկին։";
+      Alert.alert("Սխալ", message);
+    }
   }
 
   async function handleLogout() {

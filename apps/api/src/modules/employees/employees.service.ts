@@ -89,19 +89,26 @@ export class EmployeesService {
     return { employee, temporaryPassword };
   }
 
-  async update(id: string, dto: UpdateEmployeeInput) {
+  async update(id: string, dto: UpdateEmployeeInput, changedByUserId: string) {
     const existing = await this.findByIdOrThrow(id);
     const minimumDays = dto.minimumDays ?? existing.minimumDays;
     const extendedDays = dto.extendedDays ?? existing.extendedDays;
     const additionalDays = dto.additionalDays ?? existing.additionalDays;
     const annualTotal = minimumDays + extendedDays + additionalDays;
+    // Entitlement (annualTotal) and the employee's currently usable balance are separate
+    // fields — balance already reflects days used this year, so a change to entitlement must
+    // shift balance by the same delta rather than resetting it, or previously-used days would
+    // be silently un-used (or over-used days silently forgiven).
+    const balanceDelta = annualTotal - existing.annualTotal;
+    const nextBalance = existing.balance + balanceDelta;
 
     if (dto.managerId !== undefined && dto.managerId !== null) {
       if (dto.managerId === id) throw new BadRequestException("Աշխատողը չի կարող ինքն իր ղեկավարը լինել։");
       await this.assertNoManagerCycle(id, dto.managerId);
     }
 
-    return this.prisma.client.employee.update({
+    const tx = this.prisma.client;
+    const updated = await tx.employee.update({
       where: { id },
       data: {
         name: dto.name,
@@ -120,8 +127,24 @@ export class EmployeesService {
         extendedDays,
         additionalDays,
         annualTotal,
+        balance: nextBalance,
       },
     });
+
+    if (balanceDelta !== 0) {
+      await tx.balanceAdjustmentLog.create({
+        data: {
+          organizationId: getOrgId(),
+          employeeId: id,
+          field: "balance",
+          previousValue: existing.balance,
+          nextValue: nextBalance,
+          changedByUserId,
+        },
+      });
+    }
+
+    return updated;
   }
 
   /** Walks up from `newManagerId` through the manager chain — if `employeeId` appears, setting

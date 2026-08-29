@@ -12,6 +12,16 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* Mobile section-switcher strips (HrDashboard, DocumentsSection) scroll horizontally without
+   a visible scrollbar taking up space under the pills. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Shared between the TipTap editor (RichTextEditor) and read-only display of the same
    contentHtml elsewhere (document preview before signing, etc.) so both look identical. */
 .rich-text-content h2 {

@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
-import { ScrollView, View, Text, TextInput, StyleSheet, ActivityIndicator } from "react-native";
+import { ScrollView, View, Text, TextInput, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { fmtDateHY, REQUEST_TYPE_LABELS } from "@omboo/shared";
-import { api, logout as apiLogout } from "../../lib/api-client";
+import { api, ApiError, logout as apiLogout } from "../../lib/api-client";
 import { useSession } from "../../lib/session-context";
 import type { RequestView } from "../../lib/types";
 import { Card } from "../../components/ui/Card";
@@ -18,13 +18,20 @@ export default function DirectorHome() {
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    const [p, t] = await Promise.all([
-      api.get<RequestView[]>("/requests/pending-director"),
-      api.get<RequestView[]>("/requests/team-out"),
-    ]);
-    setPending(p);
-    setTeamOut(t);
-    setLoading(false);
+    try {
+      const [p, t] = await Promise.all([
+        api.get<RequestView[]>("/requests/pending-director"),
+        api.get<RequestView[]>("/requests/team-out"),
+      ]);
+      setPending(p);
+      setTeamOut(t);
+    } catch (e) {
+      await refreshSession();
+      const message = e instanceof ApiError ? e.message : "Չհաջողվեց բեռնել տվյալները։";
+      Alert.alert("Սխալ", message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useFocusEffect(
@@ -34,9 +41,14 @@ export default function DirectorHome() {
   );
 
   async function decide(id: string, decision: "APPROVED" | "REJECTED", note?: string) {
-    await api.patch(`/requests/${id}/decision`, { decision, note });
-    setRejectDraft((prev) => ({ ...prev, [id]: "" }));
-    load();
+    try {
+      await api.patch(`/requests/${id}/decision`, { decision, note });
+      setRejectDraft((prev) => ({ ...prev, [id]: "" }));
+      load();
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Չհաջողվեց ուղարկել որոշումը, փորձեք կրկին։";
+      Alert.alert("Սխալ", message);
+    }
   }
 
   async function handleLogout() {
