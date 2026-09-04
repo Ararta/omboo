@@ -24,3 +24,5 @@ export { PrismaClient } from "@prisma/client";
 export * from "@prisma/client";
 export * from "./tenant-context";
 export * from "./tenant-scope";
+export * from "./partner-context";
+export * from "./partner-scope";

@@ -59,6 +59,12 @@ model Organization {
   name String
   slug String @unique
 
+  // Grants access to the Platform Admin section (global commission-rate table, package
+  // pricing, marketing materials) inside this org's DIRECTOR dashboard. Set true on exactly
+  // one organization (Omboo's own "ararta" org) via seed/one-off script — never user-editable
+  // through any API.
+  isPlatformOwner Boolean @default(false)
+
   users               User[]
   employees           Employee[]
   documents           EmployeeDocument[]
@@ -516,4 +522,273 @@ model GeneratedDocument {
   @@index([organizationId, status])
   @@index([employeeId])
   @@map("generated_documents")
+}
+
+// ============================================================================================
+// B2B Partner Portal — a second, fully independent tenant system for reseller/affiliate
+// partners who refer paying customers and earn commission. Deliberately NOT built on top of
+// Organization/organizationId (see packages/database/src/partner-scope.ts header comment):
+// partners are a sales channel, not Omboo customers, so this is a parallel set of models keyed
+// on partnerId, with its own RLS policies (prisma/migrations/*_partner_rls) and its own
+// Postgres session var (app.current_partner_id). Partner rows never join to Organization rows.
+// ============================================================================================
+
+enum PartnerRole {
+  OWNER
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum ContractYearTier {
+  YEAR_1
+  YEAR_2_PLUS
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  CANCELLED
+}
+
+enum CommissionStatus {
+  PENDING
+  PAID
+}
+
+// Only EMAIL is actually implemented in this phase — the field exists so a future WhatsApp
+// delivery channel is additive (new enum value + delivery code), not a schema migration.
+enum DeliveryChannel {
+  EMAIL
+  WHATSAPP
+}
+
+// The tenant root for a partner organization. Self-registration is immediately active — no
+// approval gate (see PartnerAuthService.register) — so, unlike Organization, there is no
+// "founding director approves pending users" concept here at all.
+model Partner {
+  id          String @id @default(cuid())
+  companyName String
+  contactName String
+  email       String @unique
+  phone       String
+
+  // Omboo-side named contact person shown on the partner's Overview tab. No dedicated admin UI
+  // in this phase — set directly in the DB/seed when a partner is onboarded.
+  assignedContactName  String?
+  assignedContactEmail String?
+
+  users            PartnerUser[]
+  refreshTokens    PartnerRefreshToken[]
+  orders           Order[]
+  invoices         Invoice[]
+  invoiceSequences PartnerInvoiceSequence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("partners")
+}
+
+// The login account within a Partner. PartnerRole has one value today (OWNER) — the field
+// exists so a partner company can add teammates later without a schema change.
+model PartnerUser {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         PartnerRole @default(OWNER)
+
+  partnerId String
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  refreshTokens PartnerRefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partnerId])
+  @@map("partner_users")
+}
+
+model PartnerRefreshToken {
+  id            String      @id @default(cuid())
+  partnerUserId String
+  partnerUser   PartnerUser @relation(fields: [partnerUserId], references: [id], onDelete: Cascade)
+  tokenHash     String
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime    @default(now())
+
+  partnerId String
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  @@index([partnerUserId])
+  @@index([partnerId])
+  @@map("partner_refresh_tokens")
+}
+
+// The Omboo product package a partner can sell — platform-global, not partner-scoped. Managed
+// exclusively through Platform Admin (an Organization with isPlatformOwner = true).
+model Package {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+
+  prices          PackagePrice[]
+  commissionRates CommissionRate[]
+  orders          Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("packages")
+}
+
+// One price per (package, billing cycle) — plain whole-AMD Int, no sub-unit.
+model PackagePrice {
+  id           String       @id @default(cuid())
+  packageId    String
+  package      Package      @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  billingCycle BillingCycle
+  amountAmd    Int
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([packageId, billingCycle])
+  @@map("package_prices")
+}
+
+// The single global commission-rate table (package × billing cycle × contract-year tier ->
+// percentage) — applies uniformly to every partner. Every Order snapshots the rate it used at
+// creation time, so editing a row here never changes an already-placed order's numbers.
+model CommissionRate {
+  id               String           @id @default(cuid())
+  packageId        String
+  package          Package          @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  billingCycle     BillingCycle
+  contractYearTier ContractYearTier
+  ratePercent      Float
+
+  updatedByUserId String
+  updatedAt       DateTime @updatedAt
+
+  @@unique([packageId, billingCycle, contractYearTier])
+  @@map("commission_rates")
+}
+
+// Downloadable sales-enablement material (one-pagers, logos, price sheets) — platform-global,
+// visible to every partner, managed only through Platform Admin. File itself lives in S3/MinIO
+// under marketing-assets/<id>/... ; this row is metadata only (same pattern as EmployeeDocument).
+model MarketingAsset {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  fileKey     String
+  fileName    String
+  mimeType    String
+  fileSize    Int
+
+  uploadedByUserId String
+
+  createdAt DateTime @default(now())
+
+  @@map("marketing_assets")
+}
+
+// The "deal" — a partner referring a customer for a specific package/cycle. Money fields are
+// snapshotted at creation from the (then-current) PackagePrice/CommissionRate, never re-derived
+// live, so a later admin edit to those global tables can't retroactively change a placed order.
+// customerCompanyName/... describe a lead, not an Omboo Organization — no account exists yet.
+model Order {
+  id String @id @default(cuid())
+
+  partnerId String
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  packageId    String
+  package      Package      @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  billingCycle BillingCycle
+  // 1 for a brand-new customer, >=2 for a renewal-year sale — maps to ContractYearTier
+  // (1 -> YEAR_1, everything else -> YEAR_2_PLUS) when looking up the commission rate.
+  contractYear Int @default(1)
+
+  customerCompanyName String
+  customerContactName String
+  customerEmail       String
+  customerPhone       String
+
+  priceAmountAmd        Int
+  commissionRatePercent Float
+  commissionAmountAmd   Int
+
+  status            OrderStatus       @default(PENDING_PAYMENT)
+  commissionStatus  CommissionStatus  @default(PENDING)
+  commissionPaidAt  DateTime?
+
+  notes String?
+
+  createdByPartnerUserId String
+
+  invoice Invoice?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partnerId, status])
+  @@index([partnerId])
+  @@map("orders")
+}
+
+// The prepayment invoice generated from an Order. invoiceNumber is per-partner/year sequential
+// (see PartnerInvoiceSequence). deliveryChannel is a future-proofing field — only EMAIL is
+// implemented; WhatsApp delivery is a later phase.
+model Invoice {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  partnerId String
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  invoiceNumber   String
+  amountAmd       Int
+  currency        String          @default("AMD")
+  status          InvoiceStatus   @default(DRAFT)
+  deliveryChannel DeliveryChannel @default(EMAIL)
+
+  pdfFileKey String?
+  sentAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partnerId])
+  @@map("invoices")
+}
+
+// Atomic per-partner/year invoice-number counter — same pattern as OrderSequence.
+model PartnerInvoiceSequence {
+  id        String @id @default(cuid())
+  year      Int
+  lastValue Int    @default(0)
+
+  partnerId String
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+
+  @@unique([partnerId, year])
+  @@index([partnerId])
+  @@map("partner_invoice_sequences")
 }

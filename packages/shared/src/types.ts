@@ -12,6 +12,16 @@ export type RecallStatus = "PENDING_EMPLOYEE" | "ACCEPTED" | "DECLINED" | "FINAL
 
 export type OrderSeries = "PRIMARY" | "RECALL";
 
+// B2B Partner Portal — a domain fully separate from the org/employee types above (see
+// packages/database/src/partner-scope.ts header comment for why).
+export type PartnerRole = "OWNER";
+export type BillingCycle = "MONTHLY" | "QUARTERLY" | "YEARLY";
+export type ContractYearTier = "YEAR_1" | "YEAR_2_PLUS";
+export type PartnerOrderStatus = "PENDING_PAYMENT" | "PAID" | "CANCELLED";
+export type InvoiceStatus = "DRAFT" | "SENT" | "PAID" | "CANCELLED";
+export type CommissionStatus = "PENDING" | "PAID";
+export type DeliveryChannel = "EMAIL" | "WHATSAPP";
+
 /** Minimal employee shape the vacation-rule engine needs. All dates are ISO ("YYYY-MM-DD") strings. */
 export interface EmployeeRuleContext {
   id: string;

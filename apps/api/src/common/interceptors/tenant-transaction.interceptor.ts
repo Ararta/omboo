@@ -23,10 +23,18 @@ export class TenantTransactionInterceptor implements NestInterceptor {
     if (!organizationId) return next.handle();
 
     return from(
-      this.prisma.extended.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
-        return runWithTx(tx, () => lastValueFrom(next.handle()));
-      }),
+      this.prisma.extended.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
+          return runWithTx(tx, () => lastValueFrom(next.handle()));
+        },
+        // OrdersService.confirmAndSignOrder (and the Partner Portal's DealsService) render a PDF
+        // (Puppeteer, slow especially on a cold browser launch), upload it to S3, and send an
+        // email — all inside this same request, easily exceeding Prisma's 5s interactive-
+        // transaction default and aborting an otherwise-successful write. 30s covers a cold
+        // Puppeteer start plus network I/O with real headroom.
+        { timeout: 30_000 },
+      ),
     );
   }
 }

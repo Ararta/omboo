@@ -8,6 +8,10 @@ export interface JwtPayload {
   role: Role;
   employeeId: string | null;
   organizationId: string;
+  // Grants access to the Platform Admin section (B2B Partner Portal's global commission-rate
+  // table, package pricing, marketing materials) — true only for the one org that manages
+  // those, never user-editable. See PlatformAdminGuard.
+  isPlatformOwner: boolean;
 }
 
 export interface AuthenticatedUser {
@@ -15,6 +19,7 @@ export interface AuthenticatedUser {
   role: Role;
   employeeId: string | null;
   organizationId: string;
+  isPlatformOwner: boolean;
 }
 
 @Injectable()
@@ -33,6 +38,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: payload.role,
       employeeId: payload.employeeId,
       organizationId: payload.organizationId,
+      isPlatformOwner: payload.isPlatformOwner,
     };
   }
 }

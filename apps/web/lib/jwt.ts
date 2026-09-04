@@ -13,6 +13,9 @@ export interface SessionPayload {
   sub: string;
   role: Role;
   employeeId: string | null;
+  // Grants access to the Platform Admin section of the DIRECTOR dashboard (B2B Partner
+  // Portal's global commission-rate table, package pricing, marketing materials).
+  isPlatformOwner: boolean;
   exp: number;
 }
 

@@ -1,4 +1,16 @@
-import type { DocumentCategory, GeneratedDocumentStatus, RecallStatus, RequestStatus, RequestType, TemplateCategory } from "@omboo/shared";
+import type {
+  BillingCycle,
+  CommissionStatus,
+  DeliveryChannel,
+  DocumentCategory,
+  GeneratedDocumentStatus,
+  InvoiceStatus,
+  PartnerOrderStatus,
+  RecallStatus,
+  RequestStatus,
+  RequestType,
+  TemplateCategory,
+} from "@omboo/shared";
 
 export interface EmployeeView {
   id: string;
@@ -145,4 +157,98 @@ export interface GeneratedDocumentView {
   createdAt: string;
   employee?: { id: string; name: string; position: string };
   template?: { name: string };
+}
+
+// ---- B2B Partner Portal ----
+
+export interface PackagePriceView {
+  id: string;
+  billingCycle: BillingCycle;
+  amountAmd: number;
+}
+
+export interface PackageView {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  prices: PackagePriceView[];
+}
+
+export interface CommissionRateView {
+  id: string;
+  packageId: string;
+  billingCycle: BillingCycle;
+  contractYearTier: "YEAR_1" | "YEAR_2_PLUS";
+  ratePercent: number;
+  package?: { id: string; key: string; name: string };
+}
+
+export interface InvoiceView {
+  id: string;
+  orderId: string;
+  invoiceNumber: string;
+  amountAmd: number;
+  currency: string;
+  status: InvoiceStatus;
+  deliveryChannel: DeliveryChannel;
+  pdfFileKey: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+export interface OrderView {
+  id: string;
+  packageId: string;
+  billingCycle: BillingCycle;
+  contractYear: number;
+  customerCompanyName: string;
+  customerContactName: string;
+  customerEmail: string;
+  customerPhone: string;
+  priceAmountAmd: number;
+  commissionRatePercent: number;
+  commissionAmountAmd: number;
+  status: PartnerOrderStatus;
+  commissionStatus: CommissionStatus;
+  commissionPaidAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  package: { id: string; name: string };
+  invoice: InvoiceView | null;
+  partner?: { id: string; companyName: string };
+}
+
+export interface PartnerOverviewView {
+  thisMonthSalesAmd: number;
+  pendingCommissionAmd: number;
+  paidCommissionAmd: number;
+  nextPayoutDate: string | null;
+  assignedContactName: string | null;
+  assignedContactEmail: string | null;
+}
+
+export interface PartnerView {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  assignedContactName: string | null;
+  assignedContactEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketingAssetView {
+  id: string;
+  title: string;
+  description: string | null;
+  fileKey: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedByUserId: string;
+  createdAt: string;
 }

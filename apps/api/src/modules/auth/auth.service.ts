@@ -237,11 +237,19 @@ export class AuthService {
   }
 
   private async issueTokenPair(user: User): Promise<TokenPair> {
+    // organizations carries no RLS (see the enable_rls migration) and isn't tenant-scoped by the
+    // Layer 1 extension either, so this resolves regardless of whether a request context is set.
+    const org = await this.prisma.client.organization.findUniqueOrThrow({
+      where: { id: user.organizationId },
+      select: { slug: true, isPlatformOwner: true },
+    });
+
     const payload: JwtPayload = {
       sub: user.id,
       role: user.role,
       employeeId: user.employeeId,
       organizationId: user.organizationId,
+      isPlatformOwner: org.isPlatformOwner,
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_ACCESS_SECRET ?? "change-me-access-secret-dev-only",
@@ -256,13 +264,6 @@ export class AuthService {
         tokenHash: hashToken(refreshToken),
         expiresAt: new Date(Date.now() + refreshTtlMs()),
       },
-    });
-
-    // organizations carries no RLS (see the enable_rls migration) and isn't tenant-scoped by the
-    // Layer 1 extension either, so this resolves regardless of whether a request context is set.
-    const org = await this.prisma.client.organization.findUniqueOrThrow({
-      where: { id: user.organizationId },
-      select: { slug: true },
     });
 
     return { accessToken, refreshToken, user: toPublicUser(user, org.slug) };

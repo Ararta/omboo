@@ -19,8 +19,10 @@ async function main() {
 
   const org = await prisma.organization.upsert({
     where: { slug: "ararta" },
-    update: {},
-    create: { name: "Արարտա", slug: "ararta" },
+    // Omboo's own org — the one that manages the global commission-rate table, package
+    // pricing, and marketing materials for the B2B Partner Portal (see Platform Admin).
+    update: { isPlatformOwner: true },
+    create: { name: "Արարտա", slug: "ararta", isPlatformOwner: true },
   });
 
   const existingOrgSettings = await prisma.orgSettings.findFirst({ where: { organizationId: org.id } });

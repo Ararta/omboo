@@ -5,8 +5,11 @@ import { JwtModule } from "@nestjs/jwt";
 import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { PrismaModule } from "./common/prisma/prisma.module";
+import { PartnerPrismaModule } from "./common/prisma/partner-prisma.module";
 import { TenantContextMiddleware } from "./common/middleware/tenant-context.middleware";
+import { PartnerContextMiddleware } from "./common/middleware/partner-context.middleware";
 import { TenantTransactionInterceptor } from "./common/interceptors/tenant-transaction.interceptor";
+import { PartnerTenantTransactionInterceptor } from "./common/interceptors/partner-tenant-transaction.interceptor";
 import { AuthModule } from "./modules/auth/auth.module";
 import { EmployeesModule } from "./modules/employees/employees.module";
 import { RequestsModule } from "./modules/requests/requests.module";
@@ -20,6 +23,10 @@ import { EmailModule } from "./modules/email/email.module";
 import { AttendanceModule } from "./modules/attendance/attendance.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { DocumentTemplatesModule } from "./modules/document-templates/document-templates.module";
+import { PartnerAuthModule } from "./modules/partner-auth/partner-auth.module";
+import { PlatformAdminModule } from "./modules/platform-admin/platform-admin.module";
+import { DealsModule } from "./modules/deals/deals.module";
+import { PartnersModule } from "./modules/partners/partners.module";
 
 @Module({
   imports: [
@@ -32,6 +39,7 @@ import { DocumentTemplatesModule } from "./modules/document-templates/document-t
     // the access token and read organizationId, same secret as JwtStrategy.
     JwtModule.register({ secret: process.env.JWT_ACCESS_SECRET ?? "change-me-access-secret-dev-only" }),
     PrismaModule,
+    PartnerPrismaModule,
     AuthModule,
     EmployeesModule,
     RequestsModule,
@@ -45,14 +53,19 @@ import { DocumentTemplatesModule } from "./modules/document-templates/document-t
     AttendanceModule,
     DocumentsModule,
     DocumentTemplatesModule,
+    PartnerAuthModule,
+    PlatformAdminModule,
+    DealsModule,
+    PartnersModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: TenantTransactionInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: PartnerTenantTransactionInterceptor },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantContextMiddleware).forRoutes("*");
+    consumer.apply(TenantContextMiddleware, PartnerContextMiddleware).forRoutes("*");
   }
 }
